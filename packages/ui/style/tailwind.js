@@ -36,6 +36,9 @@ module.exports = function (app, options) {
 				'7xl': '5rem'
 			},
 			extend: {
+				zIndex: {
+					55: '55'
+				},
 				colors: {
 					accent: {
 						DEFAULT: alpha('--color-accent'),
@@ -148,6 +151,12 @@ module.exports = function (app, options) {
 						'out-back': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
 						'in-out-back': 'cubic-bezier(0.68, -0.6, 0.32, 1.6)'
 					}
+				},
+				keyframes: {
+					sdpulse: { '25%': { opacity: '.95' }, '50%': { opacity: '1' }, '75%': { opacity: '.95' } }
+				},
+				animation: {
+					sdpulse: 'sdpulse 0.6s cubic-bezier(0.1, 0.4, 1.0, 0.1) infinite'
 				}
 			}
 		},

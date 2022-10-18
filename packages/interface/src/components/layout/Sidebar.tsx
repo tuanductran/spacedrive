@@ -27,12 +27,11 @@ import {
 	CirclesFour,
 	Gear,
 	GearSix,
-	Lock,
+	HandGrabbing,
 	Planet,
-	Plus,
-	ShareNetwork
+	Plus
 } from 'phosphor-react';
-import React, { PropsWithChildren, useState } from 'react';
+import { PropsWithChildren, useState } from 'react';
 import { NavLink, NavLinkProps } from 'react-router-dom';
 
 import { useOperatingSystem } from '../../hooks/useOperatingSystem';
@@ -110,9 +109,9 @@ export function Sidebar() {
 						<Icon component={Planet} />
 						Overview
 					</SidebarLink>
-					<SidebarLink to="photos">
-						<Icon component={ShareNetwork} />
-						Nodes
+					<SidebarLink to="drop">
+						<HandGrabbing className="w-4 h-4 mr-2" />
+						Spacedrop
 					</SidebarLink>
 					<SidebarLink to="content">
 						<Icon component={CirclesFour} />

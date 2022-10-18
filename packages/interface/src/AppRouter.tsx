@@ -9,7 +9,7 @@ import { useKeybindHandler } from './hooks/useKeyboardHandler';
 const DebugScreen = lazy(() => import('./screens/Debug'));
 const SettingsScreen = lazy(() => import('./screens/settings/Settings'));
 const TagExplorer = lazy(() => import('./screens/TagExplorer'));
-const PhotosScreen = lazy(() => import('./screens/Photos'));
+const SpacedropScreen = lazy(() => import('./screens/Spacedrop'));
 const OverviewScreen = lazy(() => import('./screens/Overview'));
 const ContentScreen = lazy(() => import('./screens/Content'));
 const LocationExplorer = lazy(() => import('./screens/LocationExplorer'));
@@ -62,7 +62,7 @@ export function AppRouter() {
 						<Route index element={<Navigate to="/overview" />} />
 						<Route path="overview" element={<OverviewScreen />} />
 						<Route path="content" element={<ContentScreen />} />
-						<Route path="photos" element={<PhotosScreen />} />
+						<Route path="drop" element={<SpacedropScreen />} />
 						<Route path="debug" element={<DebugScreen />} />
 						<Route path={'settings'} element={<SettingsScreen />}>
 							<Route index element={<GeneralSettings />} />
