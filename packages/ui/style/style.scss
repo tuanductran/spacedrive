@@ -5,8 +5,8 @@
 @tailwind utilities;
 @tailwind variants;
 
-.html {
-	background: #404040;
+html {
+	background: hsla(var(--color-app));
 }
 
 .backdrop-blur {
