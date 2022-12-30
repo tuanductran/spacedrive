@@ -189,18 +189,9 @@ export default function OverviewScreen() {
 					{/* <Device name={`James' MacBook Pro`} size="1TB" locations={[]} type="desktop" /> */}
 					{/* <Device name={`James' iPhone 12`} size="47.7GB" locations={[]} type="phone" />
 					<Device name={`Spacedrive Server`} size="5GB" locations={[]} type="server" /> */}
-					<Debug />
 				</div>
 				<div className="flex flex-shrink-0 w-full h-4" />
 			</div>
 		</div>
 	);
-}
-
-// TODO(@Oscar): Remove this
-function Debug() {
-	// const org = useBridgeQuery(['normi.org']);
-	// console.log(org.data);
-
-	return null;
 }

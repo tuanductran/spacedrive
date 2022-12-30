@@ -1,9 +1,20 @@
-use crate::api::Router;
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
-use rspc::{internal::specta::DataType, Type};
-use serde::Serialize;
-use serde_json::Value;
-use std::sync::Arc;
+use futures::TryFutureExt;
+use normi::{normalise, Object};
+use rspc::{internal::specta::DataType, RouterBuilder};
+use serde_json::{Map, Value};
+use tokio::{
+	sync::{
+		broadcast::{self, error::RecvError},
+		mpsc,
+	},
+	time::sleep,
+};
+use tracing::warn;
+use uuid::Uuid;
+
+use crate::api::Router;
 
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
@@ -12,20 +23,6 @@ use std::sync::Mutex;
 #[cfg(debug_assertions)]
 pub(crate) static INVALIDATION_REQUESTS: Mutex<InvalidRequests> =
 	Mutex::new(InvalidRequests::new());
-
-#[derive(Debug, Clone, Serialize, Type)]
-pub struct InvalidateOperationEvent {
-	/// This fields are intentionally private.
-	key: &'static str,
-	arg: Value,
-}
-
-impl InvalidateOperationEvent {
-	/// If you are using this function, your doing it wrong.
-	pub fn dangerously_create(key: &'static str, arg: Value) -> Self {
-		Self { key, arg }
-	}
-}
 
 /// a request to invalidate a specific resource
 #[derive(Debug)]
@@ -61,7 +58,7 @@ impl InvalidRequests {
 			for req in &invalidate_requests.queries {
 				if let Some(query_ty) = queries.get(req.key) {
 					if let Some(arg) = &req.arg_ty {
-						if &query_ty.ty.arg_ty != arg {
+						if &query_ty.ty.input != arg {
 							panic!(
 								"Error at '{}': Attempted to invalid query '{}' but the argument type does not match the type defined on the router.",
 								req.macro_src, req.key
@@ -105,15 +102,13 @@ macro_rules! invalidate_query {
 					.push(crate::api::utils::InvalidationRequest {
 						key: $key,
 						arg_ty: None,
-            macro_src: concat!(file!(), ":", line!()),
+            			macro_src: concat!(file!(), ":", line!()),
 					})
 			}
 		}
 
 		// The error are ignored here because they aren't mission critical. If they fail the UI might be outdated for a bit.
-		ctx.emit(crate::api::CoreEvent::InvalidateOperation(
-			crate::api::utils::InvalidateOperationEvent::dangerously_create($key, serde_json::Value::Null)
-		))
+		ctx.node_context.invalidation_manager.unchecked_invalidate_key(Some(ctx.id), $key, None);
 	}};
 	($ctx:expr, $key:literal: $arg_ty:ty, $arg:expr $(,)?) => {{
 		let _: $arg_ty = $arg; // Assert the type the user provided is correct
@@ -141,12 +136,137 @@ macro_rules! invalidate_query {
 		// The error are ignored here because they aren't mission critical. If they fail the UI might be outdated for a bit.
 		let _ = serde_json::to_value($arg)
 			.map(|v|
-				ctx.emit(crate::api::CoreEvent::InvalidateOperation(
-					crate::api::utils::InvalidateOperationEvent::dangerously_create($key, v),
-				))
+				ctx.node_context.invalidation_manager.unchecked_invalidate_key(Some(ctx.id), $key, Some(v));
 			)
 			.map_err(|_| {
-				tracing::warn!("Failed to serialize invalidate query event!");
+				tracing::warn!("Invalidate query error: Failed to serialize query arguments!");
 			});
 	}};
+}
+
+pub struct InvalidationManager(mpsc::Sender<(Option<Uuid /* library_id */>, Value)>);
+
+impl InvalidationManager {
+	pub fn new<TCtx: Send + Sync + 'static>() -> (RouterBuilder<TCtx>, Arc<Self>) {
+		let (tx, mut rx) = mpsc::channel::<(Option<Uuid /* library_id */>, Value)>(30);
+		let (tx2, rx2) = broadcast::channel(30);
+
+		// We queue all messages to the frontend and push them every 200 milliseconds
+		tokio::spawn(async move {
+			let mut queued = VecDeque::with_capacity(15);
+
+			loop {
+				tokio::select! {
+					_ = sleep(Duration::from_millis(200)) => {
+						let len = queued.len();
+						// If an item was removed from the queue between getting the length and draining this could panic. I don't think this will be an issue given how we are using it.
+						let queue = (&mut queued).drain(0..len).collect::<Vec<_>>();
+
+						if queue.len() > 0 {
+							println!("DRAIN {:?}", queue); // TODO: Remove
+							let _ = tx2.send(queue).map_err(|_| warn!("Error sending invalidate event on broadcast channel."));
+						}
+					},
+					event = (&mut rx).recv() => {
+						if let Some(event) = event {
+							println!("QUEUEING {:?}", event); // TODO: Remove
+							(&mut queued).push_back(event);
+						} else {
+							warn!("Shutting down the invalidation handler thread due to `InvalidationManager` being dropped.");
+							return;
+						}
+					}
+				}
+			}
+		});
+
+		let router = rspc::Router::<TCtx>::new().subscription("invalidate", move |t| {
+			t(move |_, library_id: Uuid| {
+				let mut rx2 = rx2.resubscribe();
+				async_stream::stream! {
+					loop {
+						match rx2.recv().await {
+							Ok(values) => yield values.into_iter().filter_map(|(lid, value)| (lid.is_none() || lid == Some(library_id)).then(|| value)).collect::<Vec<_>>(),
+							Err(RecvError::Lagged(i)) => {
+								warn!("'invalidQuery' subscription reported lag, missing '{}' messages on the broadcast channel.", i);
+								return;
+							},
+							Err(RecvError::Closed) => return,
+						}
+					}
+				}
+			})
+		});
+
+		(router, Arc::new(Self(tx)))
+	}
+
+	/// Invalidate an rspc operation on the frontend. This method does no check the key is a valid one so you should use the `invalidate_query!` macro instead.
+	pub fn unchecked_invalidate_key(
+		&self,
+		library_id: Option<Uuid>,
+		query_key: &'static str,
+		args: Option<Value>,
+	) {
+		let _ = self
+			.0
+			.send((
+				library_id,
+				Value::Object({
+					let mut obj = Map::new();
+					obj.insert(
+						"$invalidate".into(),
+						Value::Array(match args {
+							Some(args) => vec![query_key.into(), args],
+							None => vec![query_key.into()],
+						}),
+					);
+					obj
+				}),
+			))
+			.map_err(|_| warn!("Error sending invalidate event on mpsc channel."));
+	}
+
+	/// invalidate a normalized object in a library.
+	/// WARNING: This invalidates all normalised objects but not the query itself.
+	pub async fn invalidate(&self, library_id: Uuid, value: impl Object) {
+		let value = normalise(value).unwrap();
+
+		let _ = self
+			.0
+			.send((
+				Some(library_id),
+				match value {
+					Value::Object(mut obj) => {
+						let _ = obj.remove("$data");
+						Value::Object(obj)
+					}
+					_ => unreachable!(),
+				},
+			))
+			.await
+			.map_err(|_| warn!("Error sending invalidate event on mpsc channel."));
+	}
+
+	pub async fn invalidate_global(&self, value: impl Object) {
+		let value = normalise(value).unwrap();
+
+		println!("GLOBAL {:?}", value); // TODO: Remove
+
+		let _ = self
+			.0
+			.send((
+				None,
+				match value {
+					Value::Object(mut obj) => {
+						let _ = obj.remove("$data");
+						Value::Object(obj)
+					}
+					_ => unreachable!(),
+				},
+			))
+			.await
+			.unwrap();
+		// .map_err(|_| warn!("Error sending invalidate event on mpsc channel."));
+	}
 }

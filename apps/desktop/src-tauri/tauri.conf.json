@@ -60,24 +60,7 @@
 				"save": true
 			}
 		},
-		"windows": [
-			{
-				"title": "Spacedrive",
-				"width": 1400,
-				"height": 725,
-				"minWidth": 768,
-				"minHeight": 500,
-				"resizable": true,
-				"fullscreen": false,
-				"alwaysOnTop": false,
-				"focus": false,
-				"visible": false,
-				"fileDropEnabled": false,
-				"decorations": true,
-				"transparent": true,
-				"center": true
-			}
-		],
+		"windows": [],
 		"security": {
 			"csp": "default-src spacedrive: asset: https://asset.localhost blob: data: filesystem: ws: wss: http: https: tauri: 'unsafe-eval' 'unsafe-inline' 'self' img-src: 'self'"
 		}

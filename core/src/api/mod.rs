@@ -1,7 +1,4 @@
-use std::{
-	sync::Arc,
-	time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 use rspc::{Config, Type};
 use serde::{Deserialize, Serialize};
@@ -11,20 +8,13 @@ use crate::{
 	job::JobManager,
 	library::LibraryManager,
 	node::{NodeConfig, NodeConfigManager},
+	CoreEvent,
 };
 
-use utils::{InvalidRequests, InvalidateOperationEvent};
+use self::utils::{InvalidRequests, InvalidationManager};
 
 pub type Router = rspc::Router<Ctx>;
 pub(crate) type RouterBuilder = rspc::RouterBuilder<Ctx>;
-
-/// Represents an internal core event, these are exposed to client via a rspc subscription.
-#[derive(Debug, Clone, Serialize, Type)]
-pub enum CoreEvent {
-	NewThumbnail { cas_id: String },
-	InvalidateOperation(InvalidateOperationEvent),
-	InvalidateOperationDebounced(InvalidateOperationEvent),
-}
 
 /// Is provided when executing the router from the request.
 pub struct Ctx {
@@ -32,6 +22,7 @@ pub struct Ctx {
 	pub config: Arc<NodeConfigManager>,
 	pub jobs: Arc<JobManager>,
 	pub event_bus: broadcast::Sender<CoreEvent>,
+	pub invalidation_manager: Arc<InvalidationManager>,
 }
 
 mod files;
@@ -51,7 +42,7 @@ struct NodeState {
 	data_path: String,
 }
 
-pub(crate) fn mount() -> Arc<Router> {
+pub(crate) fn mount() -> (Arc<Router>, Arc<InvalidationManager>) {
 	let config = Config::new().set_ts_bindings_header("/* eslint-disable */");
 
 	#[cfg(all(debug_assertions, not(feature = "mobile")))]
@@ -59,7 +50,7 @@ pub(crate) fn mount() -> Arc<Router> {
 		std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../packages/client/src/core.ts"),
 	);
 
-	let r = <Router>::new()
+	let router = <Router>::new()
 		.config(config)
 		.query("buildInfo", |t| {
 			#[derive(Serialize, Type)]
@@ -119,16 +110,20 @@ pub(crate) fn mount() -> Arc<Router> {
 		})
 		.build()
 		.arced();
-	InvalidRequests::validate(r.clone()); // This validates all invalidation calls.
 
-	r
+	let (normi_router, invalidation_manager) = InvalidationManager::new::<Ctx>();
+	let router = router.merge("normi.", normi_router).build().arced();
+
+	InvalidRequests::validate(router.clone()); // This validates all invalidation calls.
+
+	(router, invalidation_manager)
 }
 
 #[cfg(test)]
 mod tests {
 	/// This test will ensure the rspc router and all calls to `invalidate_query` are valid and also export an updated version of the Typescript bindings.
-	#[test]
-	fn test_and_export_rspc_bindings() {
+	#[tokio::test]
+	async fn test_and_export_rspc_bindings() {
 		super::mount();
 	}
 }

@@ -1,6 +1,6 @@
-use normi::{typed, Object};
-use rspc::Type;
-use serde::Serialize;
+use normi::{normi, Object};
+use serde::{Deserialize, Serialize};
+use specta::Type;
 
 use super::RouterBuilder;
 
@@ -17,7 +17,7 @@ pub struct Organisation {
 	pub non_normalised_data: Vec<()>,
 }
 
-#[derive(Serialize, Type, Object)]
+#[derive(Debug, Deserialize, Serialize, Type, Object)]
 pub struct User {
 	#[normi(id)]
 	pub id: String,
@@ -34,14 +34,6 @@ pub struct CompositeId {
 
 pub fn mount() -> RouterBuilder {
 	RouterBuilder::new()
-		.query("version", |t| t(|_, _: ()| "0.1.0"))
-		.query("userSync", |t| {
-			t.resolver(|_, _: ()| User {
-				id: "1".to_string(),
-				name: "Monty Beaumont".to_string(),
-			})
-			.map(typed)
-		})
 		.query("user", |t| {
 			t.resolver(|_, _: ()| async move {
 				Ok(User {
@@ -49,7 +41,7 @@ pub fn mount() -> RouterBuilder {
 					name: "Monty Beaumont".to_string(),
 				})
 			})
-			.map(typed)
+			.map(normi)
 		})
 		.query("org", |t| {
 			t.resolver(|_, _: ()| async move {
@@ -77,15 +69,22 @@ pub fn mount() -> RouterBuilder {
 					non_normalised_data: vec![(), ()],
 				})
 			})
-			.map(typed)
+			.map(normi)
 		})
-		.query("composite", |t| {
+		.query("compositeKey", |t| {
 			t.resolver(|_, _: ()| async move {
 				Ok(CompositeId {
 					org_id: "org-1".into(),
 					user_id: "user-1".into(),
 				})
 			})
-			.map(typed)
+			.map(normi)
+		})
+		.mutation("updateUser", |t| {
+			t.resolver(|ctx, user: User| async move {
+				// ctx.invalidation_manager.invalidate(library_id, user);
+				ctx.invalidation_manager.invalidate_global(user).await;
+				Ok(())
+			})
 		})
 }

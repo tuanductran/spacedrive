@@ -184,7 +184,7 @@ impl JobManager {
 		}
 	}
 
-	pub async fn resume_jobs(self: Arc<Self>, ctx: &LibraryContext) -> Result<(), JobError> {
+	pub async fn resume_jobs(self: &Arc<Self>, ctx: &LibraryContext) -> Result<(), JobError> {
 		let paused_jobs = ctx
 			.db
 			.job()

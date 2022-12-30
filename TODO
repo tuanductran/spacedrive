@@ -1,0 +1,18 @@
+ - New invalidate query system Rust
+    - New function for calling it
+    - Library scoped
+    - Frontend listen to events and update cache
+
+ - Prisma generator for Normi trait
+ - Clean up normi runtime package
+ - Push new rspc commit with changes
+
+ - Reset cache when changing library -> Allow having a cache per library?
+ - Do recursive types work?
+ - Dealing with `select` types
+ - Upgrade Spacedrive to use Normi
+
+
+
+ - Dealing with pagination?
+ - Delete objects from the cache after a timeout

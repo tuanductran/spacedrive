@@ -7,13 +7,14 @@ use crate::{
 		validation::validator_job::{ObjectValidatorJob, ObjectValidatorJobInit},
 	},
 	prisma::location,
+	CoreEvent,
 };
 
 use rspc::{ErrorCode, Type};
 use serde::Deserialize;
 use std::path::PathBuf;
 
-use super::{utils::LibraryRequest, CoreEvent, RouterBuilder};
+use super::{utils::LibraryRequest, RouterBuilder};
 
 pub(crate) fn mount() -> RouterBuilder {
 	<RouterBuilder>::new()

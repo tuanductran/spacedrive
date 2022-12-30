@@ -12,13 +12,15 @@ members = [
 ]
 
 [workspace.dependencies]
-prisma-client-rust = { git = "https://github.com/Brendonovich/prisma-client-rust.git", tag = "0.6.3", features = [
+# TODO: Move PCR back to a tag when `update-rspc` is merged
+prisma-client-rust = { path = "../prisma-client-rust", features = [
   "rspc",
   "sqlite-create-many",
   "migrations",
   "sqlite",
 ], default-features = false }
-prisma-client-rust-cli = { git = "https://github.com/Brendonovich/prisma-client-rust.git", tag = "0.6.3", features = [
+# TODO: Move PCR back to a tag when `update-rspc` is merged
+prisma-client-rust-cli = { path = "../prisma-client-rust/cli", features = [
   "rspc",
   "sqlite-create-many",
   "migrations",
@@ -29,11 +31,14 @@ rspc = { version = "0.1.2" }
 normi = { version = "0.0.1" }
 specta = { version = "0.0.4" }
 
-
 [patch.crates-io]
 # We use this patch so we can compile for the IOS simulator on M1
 openssl-sys = { git = "https://github.com/spacedriveapp/rust-openssl", rev = "92c3dec225a9e984884d5b30a517e5d44a24d03b" }
 
-rspc = { git = "https://github.com/oscartbeaumont/rspc", rev = "73d60f9cb901661f9f0f8e953477b3558f2715d1" }   # TODO: Move back to crates.io when new jsonrpc executor is released
-normi = { git = "https://github.com/oscartbeaumont/rspc", rev = "73d60f9cb901661f9f0f8e953477b3558f2715d1" }  # TODO: When normi is released on crates.io
-specta = { git = "https://github.com/oscartbeaumont/rspc", rev = "73d60f9cb901661f9f0f8e953477b3558f2715d1" } # TODO: When normi is released on crates.io
+# rspc = { git = "https://github.com/oscartbeaumont/rspc", rev = "73d60f9cb901661f9f0f8e953477b3558f2715d1" }   # TODO: Move back to crates.io when new jsonrpc executor is released
+# normi = { git = "https://github.com/oscartbeaumont/rspc", rev = "73d60f9cb901661f9f0f8e953477b3558f2715d1" }  # TODO: When normi is released on crates.io
+# specta = { git = "https://github.com/oscartbeaumont/rspc", rev = "73d60f9cb901661f9f0f8e953477b3558f2715d1" } # TODO: When normi is released on crates.io
+
+rspc = { path = "../rspc" }
+normi = { path = "../rspc/crates/normi" }
+specta = { path = "../rspc/crates/specta" }

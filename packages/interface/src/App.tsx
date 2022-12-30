@@ -1,5 +1,5 @@
 import '@fontsource/inter/variable.css';
-import { LibraryContextProvider, queryClient, useDebugState } from '@sd/client';
+import { LibraryContextProvider, NormiProvider, queryClient, useDebugState } from '@sd/client';
 import {
 	Dedupe as DedupeIntegration,
 	HttpContext as HttpContextIntegration,
@@ -33,10 +33,12 @@ export default function SpacedriveInterface() {
 	return (
 		<ErrorBoundary FallbackComponent={ErrorFallback}>
 			<QueryClientProvider client={queryClient} contextSharing={true}>
-				<Devtools />
-				<MemoryRouter>
-					<AppRouterWrapper />
-				</MemoryRouter>
+				<NormiProvider>
+					<Devtools />
+					<MemoryRouter>
+						<AppRouterWrapper />
+					</MemoryRouter>
+				</NormiProvider>
 			</QueryClientProvider>
 		</ErrorBoundary>
 	);

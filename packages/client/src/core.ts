@@ -83,6 +83,8 @@ export interface AutomountUpdateArgs { uuid: string, status: boolean }
 
 export interface BuildInfo { version: string, commit: string }
 
+export interface CompositeId { org_id: string, user_id: string }
+
 export interface ConfigMetadata { version: string | null }
 
 export interface EditLibraryArgs { id: string, name: string | null, description: string | null }
@@ -111,8 +113,6 @@ export interface IndexerRule { id: number, kind: number, name: string, parameter
 
 export interface IndexerRuleCreateArgs { kind: RuleKind, name: string, parameters: Array<number> }
 
-export interface InvalidateOperationEvent { key: string, arg: any }
-
 export interface JobReport { id: string, name: string, data: Array<number> | null, metadata: any | null, date_created: string, date_modified: string, status: JobStatus, task_count: number, completed_task_count: number, message: string, seconds_elapsed: number }
 
 export type JobStatus = "Queued" | "Running" | "Completed" | "Canceled" | "Failed" | "Paused"
@@ -123,7 +123,7 @@ export interface KeyNameUpdateArgs { uuid: string, name: string }
 
 export interface LibraryArgs<T> { library_id: string, arg: T }
 
-export interface LibraryConfig { version: string | null, name: string, description: string }
+export type LibraryConfig = ({ version: string | null }) & { name: string, description: string }
 
 export interface LibraryConfigWrapped { uuid: string, config: LibraryConfig }
 
@@ -141,17 +141,9 @@ export interface MediaData { id: number, pixel_width: number | null, pixel_heigh
 
 export interface Node { id: number, pub_id: Array<number>, name: string, platform: number, version: string | null, last_seen: string, timezone: string | null, date_created: string }
 
-export interface NodeConfig { version: string | null, id: string, name: string, p2p_port: number | null }
+export type NodeConfig = ({ version: string | null }) & { id: string, name: string, p2p_port: number | null }
 
-export interface NodeState { version: string | null, id: string, name: string, p2p_port: number | null, data_path: string }
-
-export interface NormalisedCompositeId { $type: string, $id: any, org_id: string, user_id: string }
-
-export interface NormalisedOrganisation { $type: string, $id: any, id: string, name: string, users: NormalizedVec<NormalisedUser>, owner: NormalisedUser, non_normalised_data: Array<null> }
-
-export interface NormalisedUser { $type: string, $id: any, id: string, name: string }
-
-export interface NormalizedVec<T> { $type: string, edges: Array<T> }
+export type NodeState = (({ version: string | null }) & { id: string, name: string, p2p_port: number | null }) & { data_path: string }
 
 export interface Object { id: number, cas_id: string, integrity_checksum: string | null, name: string | null, extension: string | null, kind: number, size_in_bytes: string, key_id: number | null, hidden: boolean, favorite: boolean, important: boolean, has_thumbnail: boolean, has_thumbstrip: boolean, has_video_preview: boolean, ipfs_id: string | null, note: string | null, date_created: string, date_modified: string, date_indexed: string }
 
@@ -160,6 +152,8 @@ export interface ObjectValidatorArgs { id: number, path: string }
 export interface OnboardingArgs { algorithm: Algorithm, hashing_algorithm: HashingAlgorithm }
 
 export interface OnboardingKeys { master_password: string, secret_key: string }
+
+export interface Organisation { id: string, name: string, users: Array<User>, owner: User, non_normalised_data: Array<null> }
 
 export type Params = "Standard" | "Hardened" | "Paranoid"
 
@@ -184,5 +178,7 @@ export interface TagAssignArgs { object_id: number, tag_id: number, unassign: bo
 export interface TagCreateArgs { name: string, color: string }
 
 export interface TagUpdateArgs { id: number, name: string | null, color: string | null }
+
+export interface User { id: string, name: string }
 
 export interface Volume { name: string, mount_point: string, total_capacity: bigint, available_capacity: bigint, is_removable: boolean, disk_type: string | null, file_system: string | null, is_root_filesystem: boolean }

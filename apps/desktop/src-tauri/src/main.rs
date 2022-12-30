@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use sd_core::Node;
 use tauri::async_runtime::block_on;
+use tauri::WindowBuilder;
 use tauri::{
 	api::path,
 	http::{ResponseBuilder, Uri},
@@ -58,30 +59,60 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		})
 		.setup(|app| {
 			let app = app.handle();
-			app.windows().iter().for_each(|(_, window)| {
-				// window.hide().unwrap();
+			let mut window =
+				WindowBuilder::new(app, "main", tauri::WindowUrl::App("index.html".into()))
+					.user_agent("Spacedrive Desktop")
+					.title("Spacedrive")
+					// .inner_size(1400., 725.)
+					// .min_inner_size(768., 500.)
+					.visible(false) // We show the window after the app is ready
+					// .resizable(true)
+					// .decorations(true)
+					// .transparent(true)
+					.center();
 
-				tokio::spawn({
-					let window = window.clone();
-					async move {
-						sleep(Duration::from_secs(3)).await;
-						if !window.is_visible().unwrap_or(true) {
-							println!("Window did not emit `app_ready` event fast enough. Showing window...");
-							let _ = window.show();
-						}
-					}
-				});
+			#[cfg(target_os = "macos")]
+			{
+				window = window
+					// .title_bar_style(TitleBarStyle::Overlay)
+					.decorations(false);
+				// .hidden_title(true);
+			}
 
-				#[cfg(target_os = "windows")]
-				window.set_decorations(true).unwrap();
+			let window = window.build()?;
 
-				#[cfg(target_os = "macos")]
-				{
-					use macos::*;
+			// TODO: Would be nice to move to Tauri's official API's/window_vibrancy
+			// #[cfg(target_os = "macos")]
+			// {
+			// 	use window_vibrancy::{
+			// 		apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState,
+			// 	};
 
-					let window = window.ns_window().unwrap();
-					set_titlebar_style(window, true, true);
-					blur_window_background(window);
+			// 	apply_vibrancy(
+			// 		&window,
+			// 		NSVisualEffectMaterial::Sidebar,
+			// 		None, // Some(NSVisualEffectState::FollowsWindowActiveState),
+			// 		None, // Some(0.),
+			// 	)
+			// 	.expect("Unsupported platform! 'apply_vibrancy' is only supported on macOS");
+			// }
+
+			#[cfg(target_os = "macos")]
+			{
+				use macos::*;
+
+				let window = window.ns_window()?;
+				set_titlebar_style(window, true, false);
+				blur_window_background(window);
+			}
+
+			tokio::spawn(async move {
+				sleep(Duration::from_secs(3)).await;
+				if window.is_visible().unwrap_or(true) == false {
+					println!(
+						"Window did not emit `app_ready` event fast enough. Showing window..."
+					);
+					let _ = window.show();
 				}
 			});
 

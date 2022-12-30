@@ -1,9 +1,10 @@
-use api::{CoreEvent, Ctx, Router};
+use api::{utils::InvalidationManager, Ctx, Router};
 use job::JobManager;
 use library::LibraryManager;
 use location::{LocationManager, LocationManagerError};
 use node::NodeConfigManager;
-
+use rspc::Type;
+use serde::Serialize;
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::{
@@ -25,12 +26,18 @@ pub(crate) mod volume;
 
 pub(crate) mod prisma;
 
+#[derive(Debug, Clone, Serialize, Type)]
+pub enum CoreEvent {
+	NewThumbnail { cas_id: String },
+}
+
 #[derive(Clone)]
 pub struct NodeContext {
 	pub config: Arc<NodeConfigManager>,
 	pub jobs: Arc<JobManager>,
 	pub location_manager: Arc<LocationManager>,
 	pub event_bus_tx: broadcast::Sender<CoreEvent>,
+	pub invalidation_manager: Arc<InvalidationManager>,
 }
 
 pub struct Node {
@@ -38,6 +45,7 @@ pub struct Node {
 	library_manager: Arc<LibraryManager>,
 	jobs: Arc<JobManager>,
 	event_bus: (broadcast::Sender<CoreEvent>, broadcast::Receiver<CoreEvent>),
+	invalidation_manager: Arc<InvalidationManager>,
 }
 
 #[cfg(not(feature = "android"))]
@@ -58,8 +66,6 @@ impl Node {
 
 		// This error is ignored because it's throwing on mobile despite the folder existing.
 		let _ = fs::create_dir_all(&data_dir).await;
-
-		// dbg!(get_object_kind_from_extension("png"));
 
 		// let (non_blocking, _guard) = tracing_appender::non_blocking(rolling::daily(
 		// 	Path::new(&data_dir).join("logs"),
@@ -111,6 +117,8 @@ impl Node {
 		let event_bus = broadcast::channel(1024);
 		let config = NodeConfigManager::new(data_dir.to_path_buf()).await?;
 
+		let (router, invalidation_manager) = api::mount();
+
 		let jobs = JobManager::new();
 		let location_manager = LocationManager::new();
 		let library_manager = LibraryManager::new(
@@ -120,6 +128,7 @@ impl Node {
 				jobs: Arc::clone(&jobs),
 				location_manager: Arc::clone(&location_manager),
 				event_bus_tx: event_bus.0.clone(),
+				invalidation_manager: invalidation_manager.clone(),
 			},
 		)
 		.await?;
@@ -150,18 +159,18 @@ impl Node {
 		let inner_jobs = Arc::clone(&jobs);
 		tokio::spawn(async move {
 			for library_ctx in inner_library_manager.get_all_libraries_ctx().await {
-				if let Err(e) = Arc::clone(&inner_jobs).resume_jobs(&library_ctx).await {
+				if let Err(e) = inner_jobs.resume_jobs(&library_ctx).await {
 					error!("Failed to resume jobs for library. {:#?}", e);
 				}
 			}
 		});
 
-		let router = api::mount();
 		let node = Node {
 			config,
 			library_manager,
 			jobs,
 			event_bus,
+			invalidation_manager,
 		};
 
 		info!("Spacedrive online.");
@@ -174,6 +183,7 @@ impl Node {
 			config: Arc::clone(&self.config),
 			jobs: Arc::clone(&self.jobs),
 			event_bus: self.event_bus.0.clone(),
+			invalidation_manager: self.invalidation_manager.clone(),
 		}
 	}
 

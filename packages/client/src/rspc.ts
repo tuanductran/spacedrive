@@ -29,8 +29,6 @@ export const hooks = internal_createReactHooksFactory();
 
 const nonLibraryHooks = hooks.createHooks<
 	Procedures,
-	// Normalized<NonLibraryProcedure<'queries'>>,
-	// Normalized<NonLibraryProcedure<'mutations'>>
 	NonLibraryProcedure<'queries'>,
 	NonLibraryProcedure<'mutations'>
 >({
@@ -41,8 +39,6 @@ const nonLibraryHooks = hooks.createHooks<
 
 const libraryHooks = hooks.createHooks<
 	Procedures,
-	// Normalized<StripLibraryArgsFromInput<LibraryProcedures<'queries'>>>,
-	// Normalized<StripLibraryArgsFromInput<LibraryProcedures<'mutations'>>>,
 	StripLibraryArgsFromInput<LibraryProcedures<'queries'>>,
 	StripLibraryArgsFromInput<LibraryProcedures<'mutations'>>,
 	never
@@ -72,18 +68,33 @@ export const rspc = hooks.createHooks<Procedures>();
 
 export const useBridgeQuery = nonLibraryHooks.useQuery;
 export const useBridgeMutation = nonLibraryHooks.useMutation;
+export const useBridgeSubscription = nonLibraryHooks.useSubscription;
 export const useLibraryQuery = libraryHooks.useQuery;
 export const useLibraryMutation = libraryHooks.useMutation;
 
 export function useInvalidateQuery() {
-	const context = rspc.useContext();
-	rspc.useSubscription(['invalidateQuery'], {
-		onData: (invalidateOperation) => {
-			const key = [invalidateOperation.key];
-			if (invalidateOperation.arg !== null) {
-				key.concat(invalidateOperation.arg);
-			}
-			context.queryClient.invalidateQueries(key);
+	// const context = rspc.useContext();
+	// rspc.useSubscription(['invalidateQuery'], {
+	// 	onData: (invalidateOperation) => {
+	// 		const key = [invalidateOperation.key];
+	// 		if (invalidateOperation.arg !== null) {
+	// 			key.concat(invalidateOperation.arg);
+	// 		}
+	// 		context.queryClient.invalidateQueries(key);
+	// 	}
+	// });
+	// console.log(nonLibraryHooks.useSubscription);
+
+	// TODO: If this subscription is closed or the websocket drops we need to be sure the subscription will be recreated.
+	useBridgeSubscription(['normi.invalidate', getLibraryIdRaw() as any], {
+		enabled: getLibraryIdRaw() !== null,
+		onData(data) {
+			console.log('A', data);
+			// TODO: Invalidate queries
+			// TODO: Inject item into the cache
+		},
+		onError(err) {
+			console.error("Error with 'normi.invalidate' query", err);
 		}
 	});
 }

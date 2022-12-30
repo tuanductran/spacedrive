@@ -1,9 +1,9 @@
 use crate::{
-	api::CoreEvent,
 	invalidate_query,
 	job::{JobError, JobReportUpdate, JobResult, JobState, StatefulJob, WorkerContext},
 	library::LibraryContext,
 	prisma::{file_path, location},
+	CoreEvent,
 };
 
 use std::{

@@ -8,6 +8,7 @@ use std::{
 	sync::Arc,
 };
 
+use normi::Object;
 use sd_crypto::keys::keymanager::KeyManager;
 use tracing::warn;
 use uuid::Uuid;
@@ -28,7 +29,7 @@ pub struct LibraryContext {
 	/// node_local_id holds the local ID of the node which is running the library.
 	pub node_local_id: i32,
 	/// node_context holds the node context for the node which this library is running on.
-	pub(super) node_context: NodeContext,
+	pub node_context: NodeContext,
 }
 
 impl Debug for LibraryContext {
@@ -63,7 +64,11 @@ impl LibraryContext {
 		self.node_context.config.clone()
 	}
 
+
 	pub(crate) fn location_manager(&self) -> &Arc<LocationManager> {
 		&self.node_context.location_manager
+
+	pub(crate) fn invalidate(value: impl Object) {
+		// self.node_context.invalidate(value);
 	}
 }
