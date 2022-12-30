@@ -7,9 +7,10 @@ import { SubmitHandler, useForm } from 'react-hook-form';
 import { usePlatform } from '../../util/Platform';
 import { GenericAlertDialogProps } from './AlertDialog';
 
-type FormValues = {
-	masterPassword: string;
-	secretKey: string;
+const defaultValues = {
+	masterPassword: '',
+	secretKey: '',
+	filePath: ''
 };
 
 export interface BackupRestorationDialogProps {
@@ -19,20 +20,20 @@ export interface BackupRestorationDialogProps {
 
 export const BackupRestoreDialog = (props: BackupRestorationDialogProps) => {
 	const platform = usePlatform();
-	const { register, handleSubmit, reset } = useForm<FormValues>({
-		defaultValues: {
-			masterPassword: '',
-			secretKey: ''
-		}
+	const { register, handleSubmit, setValue, reset } = useForm({
+		defaultValues
 	});
 
-	const onSubmit: SubmitHandler<FormValues> = (data) => {
-		if (filePath !== '') {
+	const onSubmit: SubmitHandler<typeof defaultValues> = (data) => {
+		if (data.filePath !== '') {
+			setValue('masterPassword', '');
+			setValue('secretKey', '');
+			setValue('filePath', '');
 			restoreKeystoreMutation.mutate(
 				{
 					password: data.masterPassword,
 					secret_key: data.secretKey,
-					path: filePath
+					path: data.filePath
 				},
 				{
 					onSuccess: (total) => {

@@ -547,6 +547,7 @@ importers:
       postcss-loader: ^7.0.1
       react: ^18.2.0
       react-dom: ^18.2.0
+      react-hook-form: ^7.36.1
       react-loading-icons: ^1.1.0
       react-router-dom: 6.4.2
       react-spring: ^9.5.5
@@ -575,6 +576,7 @@ importers:
       postcss: 8.4.20
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
+      react-hook-form: 7.40.0_react@18.2.0
       react-loading-icons: 1.1.0
       react-router-dom: 6.4.2_biqbaboplfbrettd7655fr4n2y
       react-spring: 9.6.0_biqbaboplfbrettd7655fr4n2y

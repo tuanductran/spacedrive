@@ -16,7 +16,9 @@ export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
 		>
 			<p className="m-3 text-sm font-bold text-ink-faint">APP CRASHED</p>
 			<h1 className="text-2xl font-bold text-ink">We're past the event horizon...</h1>
-			<pre className="m-2 text-ink">Error: {error.message}</pre>
+			<p className="m-2 text-ink text-center overflow-y-scroll overflow-x-clip w-full max-h-52 break-words bg-inherit">
+				Error: {error.message}
+			</p>
 			<div className="flex flex-row space-x-2 text-ink">
 				<Button variant="accent" className="mt-2" onClick={resetErrorBoundary}>
 					Reload

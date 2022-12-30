@@ -3,6 +3,7 @@ import { Button, CategoryHeading, Input, Select, SelectOption, Switch, cva, tw }
 import cryptoRandomString from 'crypto-random-string';
 import { Eye, EyeSlash, Info } from 'phosphor-react';
 import { useEffect, useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 import { getCryptoSettings } from '../../screens/settings/library/KeysSetting';
 import Slider from '../primitive/Slider';
@@ -18,27 +19,41 @@ const GeneratePassword = (length: number) => {
 };
 
 export function KeyMounter() {
-	const ref = useRef<HTMLInputElement>(null);
+	// const ref = useRef<HTMLInputElement>(null);
+
+	// we need to call these at least once somewhere
+	// if we don't, if a user mounts a key before first viewing the key list, no key will show in the list
+	// either call it in here or in the keymanager itself
+	const keys = useLibraryQuery(['keys.list']);
+	const mounted_uuids = useLibraryQuery(['keys.listMounted']);
+
 	const [showKey, setShowKey] = useState(false);
 	const [librarySync, setLibrarySync] = useState(true);
 	const [autoMount, setAutoMount] = useState(false);
 
 	const [sliderValue, setSliderValue] = useState([64]);
 
-	const [key, setKey] = useState('');
-	const [encryptionAlgo, setEncryptionAlgo] = useState('XChaCha20Poly1305');
-	const [hashingAlgo, setHashingAlgo] = useState('Argon2id-s');
-
+	// TODO: React hook form
+	const { register, handleSubmit, getValues, setValue, watch, setFocus } = useForm({
+		defaultValues: {
+			key: '',
+			encryptionAlgo: 'XChaCha20Poly1305',
+			hashingAlgo: 'Argon2id-s'
+		}
+	});
 	const createKey = useLibraryMutation('keys.add');
 	const CurrentEyeIcon = showKey ? EyeSlash : Eye;
 
 	// this keeps the input focused when switching tabs
 	// feel free to replace with something cleaner
 	useEffect(() => {
-		setTimeout(() => {
-			ref.current?.focus();
-		});
+		// setTimeout(() => {
+		// 	ref.current?.focus();
+		// });
+		setFocus('key', { shouldSelect: true });
 	}, []);
+
+	watch((data, { name, type }) => console.log(data, name, type));
 
 	return (
 		<div className="p-3 pt-3 mb-1">
@@ -46,12 +61,13 @@ export function KeyMounter() {
 			<div className="flex space-x-2">
 				<div className="relative flex flex-grow">
 					<Input
-						ref={ref}
-						value={key}
-						onChange={(e) => setKey(e.target.value)}
+						// ref={ref}
+						// value={key}
+						// onChange={(e) => setKey(e.target.value)}
 						autoFocus
 						type={showKey ? 'text' : 'password'}
 						className="flex-grow !py-0.5"
+						{...register('key')}
 					/>
 					<Button
 						onClick={() => setShowKey(!showKey)}
@@ -73,10 +89,10 @@ export function KeyMounter() {
 						defaultValue={[64]}
 						onValueChange={(e) => {
 							setSliderValue(e);
-							setKey(GeneratePassword(e[0]));
+							setValue('key', GeneratePassword(e[0])); // TODO: Use `react-hook-form` register function instead!
 						}}
 						onClick={() => {
-							setKey(GeneratePassword(sliderValue[0]));
+							setValue('key', GeneratePassword(sliderValue[0])); // TODO: Use `react-hook-form` register function instead!
 						}}
 					/>
 				</div>
@@ -120,14 +136,22 @@ export function KeyMounter() {
 			<div className="grid w-full grid-cols-2 gap-4 mt-4 mb-3">
 				<div className="flex flex-col">
 					<span className="text-xs font-bold">Encryption</span>
-					<Select className="mt-2" onChange={setEncryptionAlgo} value={encryptionAlgo}>
+					<Select
+						className="mt-2"
+						value={getValues('encryptionAlgo')}
+						onChange={(v) => setValue('encryptionAlgo', v)}
+					>
 						<SelectOption value="XChaCha20Poly1305">XChaCha20-Poly1305</SelectOption>
 						<SelectOption value="Aes256Gcm">AES-256-GCM</SelectOption>
 					</Select>
 				</div>
 				<div className="flex flex-col">
 					<span className="text-xs font-bold">Hashing</span>
-					<Select className="mt-2" onChange={setHashingAlgo} value={hashingAlgo}>
+					<Select
+						className="mt-2"
+						value={getValues('hashingAlgo')}
+						onChange={(v) => setValue('hashingAlgo', v)}
+					>
 						<SelectOption value="Argon2id-s">Argon2id (standard)</SelectOption>
 						<SelectOption value="Argon2id-h">Argon2id (hardened)</SelectOption>
 						<SelectOption value="Argon2id-p">Argon2id (paranoid)</SelectOption>
@@ -140,19 +164,27 @@ export function KeyMounter() {
 			<Button
 				className="w-full mt-2"
 				variant="accent"
-				disabled={key === ''}
+				disabled={getValues('key') === ''}
 				onClick={() => {
-					setKey('');
-
-					const [algorithm, hashing_algorithm] = getCryptoSettings(encryptionAlgo, hashingAlgo);
-
-					createKey.mutate({
-						algorithm,
-						hashing_algorithm,
-						key,
-						library_sync: librarySync,
-						automount: autoMount
-					});
+					// setKey('');
+					// const [algorithm, hashing_algorithm] = getCryptoSettings(encryptionAlgo, hashingAlgo);
+					// createKey.mutate({
+					// 	algorithm,
+					// 	hashing_algorithm,
+					// 	key,
+					// 	library_sync: librarySync,
+					// 	automount: autoMount
+					// });
+					//
+					// BREAK - Merge conflict I can't be fucked working out. Above/below, one is good and one is not.
+					//
+					// if (key !== '') {
+					// setValue('key', '');
+					// const [algorithm, hashing_algorithm] = getCryptoSettings(
+					// 	...getValues(['encryptionAlgo', 'hashingAlgo'])
+					// );
+					// createKey.mutate({ algorithm, hashing_algorithm, getValues('key'), library_sync: librarySync });
+					// }
 				}}
 			>
 				Mount Key

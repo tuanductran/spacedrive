@@ -6,8 +6,8 @@ import { PropsWithChildren } from 'react';
 
 interface SelectProps {
 	value: string;
-	size?: 'sm' | 'md' | 'lg';
 	className?: string;
+	disabled?: boolean;
 	onChange: (value: string) => void;
 	disabled?: boolean;
 }

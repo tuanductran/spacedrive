@@ -1,12 +1,8 @@
 import { VariantProps, cva } from 'class-variance-authority';
 import clsx from 'clsx';
-import { PropsWithChildren, forwardRef } from 'react';
+import { ComponentProps, forwardRef } from 'react';
 
-export interface InputBaseProps extends VariantProps<typeof inputStyles> {}
-
-export type InputProps = InputBaseProps & React.InputHTMLAttributes<HTMLInputElement>;
-
-export type TextareaProps = InputBaseProps & React.TextareaHTMLAttributes<HTMLTextAreaElement>;
+import { FormControlProps, FormField, useFormControl } from './FormControl';
 
 const inputStyles = cva(
 	[
@@ -32,26 +28,42 @@ const inputStyles = cva(
 	}
 );
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(
-	({ size, variant, ...props }, ref) => {
+type Props = VariantProps<typeof inputStyles> & ComponentProps<'input'> & FormControlProps;
+
+export const Input = forwardRef<HTMLInputElement, Props>(
+	({ size, variant, className, ...props }, ref) => {
+		const [controlProps, fieldProps] = useFormControl(props);
+
+		const isControlled = 'ref' in props && 'name' in props && 'onChange' in props; // Is field controlled by react-hook-form
+
+		if (!isControlled) {
+			const onChange = fieldProps.onChange;
+			fieldProps.onChange = (e) => onChange(e.target.value); // Use the form events target value.
+		}
+
 		return (
-			<input
-				ref={ref}
-				{...props}
-				className={clsx(inputStyles({ size, variant }), props.className)}
-			/>
+			<FormField {...controlProps}>
+				<input
+					ref={ref}
+					className={clsx(inputStyles({ size, variant }), props.className)}
+					{...fieldProps}
+				/>
+			</FormField>
 		);
 	}
 );
 
-export const TextArea = ({ size, variant, ...props }: TextareaProps) => {
-	return <textarea {...props} className={clsx(inputStyles({ size, variant }), props.className)} />;
-};
-
-export function Label(props: PropsWithChildren<{ slug?: string }>) {
-	return (
-		<label className="text-sm font-bold" htmlFor={props.slug}>
-			{props.children}
-		</label>
-	);
-}
+// export const TextArea = ({
+// 	size,
+// 	variant,
+// 	...props
+// }: InputBaseProps & React.TextareaHTMLAttributes<HTMLTextAreaElement>) => {
+// 	return <textarea {...props} className={clsx(inputStyles({ size, variant }), props.className)} />;
+// };
+// export function Label(props: PropsWithChildren<{ slug?: string }>) {
+// 	return (
+// 		<label className="text-sm font-bold" htmlFor={props.slug}>
+// 			{props.children}
+// 		</label>
+// 	);
+// }

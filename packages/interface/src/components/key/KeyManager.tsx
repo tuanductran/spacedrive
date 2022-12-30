@@ -33,6 +33,7 @@ export function KeyManager(props: KeyManagerProps) {
 						onChange={(e) => setMasterPassword(e.target.value)}
 						autoFocus
 						type={showMasterPassword ? 'text' : 'password'}
+						disabled={setMasterPasswordMutation.isLoading}
 						className="flex-grow !py-0.5"
 						placeholder="Master Password"
 					/>
@@ -51,6 +52,7 @@ export function KeyManager(props: KeyManagerProps) {
 						onChange={(e) => setSecretKey(e.target.value)}
 						type={showSecretKey ? 'text' : 'password'}
 						className="flex-grow !py-0.5"
+						disabled={setMasterPasswordMutation.isLoading}
 						placeholder="Secret Key"
 					/>
 					<Button
@@ -74,7 +76,7 @@ export function KeyManager(props: KeyManagerProps) {
 								{ password: masterPassword, secret_key: secretKey },
 								{
 									onError: () => {
-										alert('Incorrect information provided.');
+										alert('Incorrect information provided.'); // TODO: Do this better
 									}
 								}
 							);

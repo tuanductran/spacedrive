@@ -22,7 +22,7 @@
 		"jsx": "react-jsx",
 		"paths": {
 			"@sd/interface": ["../../packages/interface"],
-			"@sd/ui": ["../../packages/ui"],
+			"@sd/ui": ["../../packages/ui/src/*"],
 			"@sd/client": ["../../packages/client"],
 			"@sd/assets": ["../../packages/assets"]
 		}

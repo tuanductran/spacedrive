@@ -1,6 +1,7 @@
 import { useBridgeMutation } from '@sd/client';
 import { useCurrentLibrary } from '@sd/client';
-import { Button, Input, Switch } from '@sd/ui';
+import { Button, Form, Input, Select, SelectOption, Switch } from '@sd/ui';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { InputContainer } from '../../../components/primitive/InputContainer';
@@ -12,19 +13,56 @@ export default function LibraryGeneralSettings() {
 	const { library } = useCurrentLibrary();
 	const { mutate: editLibrary } = useBridgeMutation('library.edit');
 	const form = useForm({
-		defaultValues: { id: library!.uuid, ...library?.config }
+		defaultValues: { id: library!.uuid, ...library?.config, todo: 'one' }
 	});
-	useDebouncedForm(form, (value) =>
-		editLibrary({
-			id: library!.uuid,
-			name: value.name,
-			description: value.description
-		})
-	);
+
+	// useDebouncedForm(form, (value) =>
+	// 	editLibrary({
+	// 		id: library!.uuid,
+	// 		name: value.name,
+	// 		description: value.description
+	// 	})
+	// );
+
+	form.watch((values) => {
+		console.log(values);
+	});
+
+	const [todo, setTodo] = useState('');
+	const [todo2, setTodo2] = useState('two');
+
+	console.log(todo, todo2);
 
 	return (
 		<SettingsContainer>
-			<SettingsHeader
+			<Form
+				form={form}
+				onSubmit={(value) => {
+					console.log(value); // TODO: force form submit
+				}}
+			>
+				<h1>Controlled Inputs</h1>
+				<Input {...form.register('name')} />
+				<Select name="todo" control={form.control} className="mt-2">
+					<SelectOption value="one">Option ONe</SelectOption>
+					<SelectOption value="two">Option Two</SelectOption>
+				</Select>
+				{/* <Switch /> */}
+				{/* <SubmitButton /> */}
+			</Form>
+
+			<h1>Uncontrolled Inputs</h1>
+			<Input value={todo} onChange={(v) => setTodo(v)} />
+			<Select value={todo2} onChange={(v) => setTodo2(v)}>
+				<SelectOption value="one">Option One</SelectOption>
+				<SelectOption value="two">Option Two</SelectOption>
+			</Select>
+			{/* <Switch /> */}
+			{/* <SubmitButton /> */}
+
+			{/* BREAK */}
+
+			{/* <SettingsHeader
 				title="Library Settings"
 				description="General settings related to the currently active library."
 			/>
@@ -65,7 +103,7 @@ export default function LibraryGeneralSettings() {
 						Delete
 					</Button>
 				</div>
-			</InputContainer>
+			</InputContainer> */}
 		</SettingsContainer>
 	);
 }

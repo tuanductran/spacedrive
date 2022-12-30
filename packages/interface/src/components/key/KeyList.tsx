@@ -41,6 +41,7 @@ export const ListOfKeys = () => {
 			{[...mountedKeys, ...unmountedKeys]?.map((key, index) => {
 				return (
 					<Key
+						key={key.uuid}
 						index={index}
 						data={{
 							id: key.uuid,

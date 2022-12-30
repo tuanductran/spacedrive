@@ -66,7 +66,7 @@ pub enum Error {
 	NoVerificationKey,
 	#[error("key isn't flagged as memory only")]
 	KeyNotMemoryOnly,
-	#[error("wrong information provided to the key manager")]
+	#[error("incorrect credentials provided to the key manager")]
 	IncorrectKeymanagerDetails,
 	#[error("string parse error")]
 	StringParse(#[from] FromUtf8Error),

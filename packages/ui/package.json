@@ -5,6 +5,7 @@
 	"main": "src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
+		"./forms": "./src/forms/index.ts",
 		"./postcss": "./style/postcss.config.js",
 		"./tailwind": "./style/tailwind.js",
 		"./style": "./style/index.js",
@@ -32,6 +33,7 @@
 		"postcss": "^8.4.17",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
+		"react-hook-form": "^7.36.1",
 		"react-loading-icons": "^1.1.0",
 		"react-router-dom": "6.4.2",
 		"react-spring": "^9.5.5",

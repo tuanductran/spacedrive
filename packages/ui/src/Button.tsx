@@ -2,6 +2,26 @@ import { VariantProps, cva, cx } from 'class-variance-authority';
 import { forwardRef } from 'react';
 import { Link, LinkProps } from 'react-router-dom';
 
+// TODO: type=submit with react-hook-form
+
+// import { useFormContext } from 'react-hook-form';
+// import { Button, ButtonProps } from '~/ui/Button';
+
+// TODO: Loading spinner
+// export default function SubmitButton(props: ButtonProps) {
+// 	const { formState } = useFormContext();
+
+// 	return (
+// 		<Button
+// 			variant="primary"
+// 			type="submit"
+// 			disabled={formState.isSubmitting}
+// 			isLoading={formState.isSubmitting && !formState.isValidating}
+// 			{...props}
+// 		/>
+// 	);
+// }
+
 export interface ButtonBaseProps extends VariantProps<typeof styles> {}
 
 export type ButtonProps = ButtonBaseProps &
@@ -13,11 +33,6 @@ export type LinkButtonProps = ButtonBaseProps &
 	React.AnchorHTMLAttributes<HTMLAnchorElement> & {
 		href?: string;
 	};
-
-type Button = {
-	(props: ButtonProps): JSX.Element;
-	(props: LinkButtonProps): JSX.Element;
-};
 
 const hasHref = (props: ButtonProps | LinkButtonProps): props is LinkButtonProps => 'href' in props;
 
@@ -75,7 +90,7 @@ export const Button = forwardRef<
 });
 
 export const ButtonLink = forwardRef<
-	HTMLLinkElement,
+	HTMLAnchorElement,
 	ButtonBaseProps & LinkProps & React.RefAttributes<HTMLAnchorElement>
 >(({ className, to, ...props }, ref) => {
 	className = cx(
@@ -85,7 +100,7 @@ export const ButtonLink = forwardRef<
 	);
 
 	return (
-		<Link to={to} ref={ref as any} className={className}>
+		<Link to={to} ref={ref} className={className}>
 			{props.children}
 		</Link>
 	);
