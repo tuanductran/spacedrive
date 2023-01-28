@@ -10,7 +10,7 @@ const NodePill = tw.div`px-1.5 py-[2px] rounded text-xs font-medium bg-app-selec
 const NodeSettingLabel = tw.div`mb-1 text-xs font-medium`;
 
 export default function GeneralSettings() {
-	const { data: node } = useBridgeQuery(['nodeState']);
+	const { data: node } = useBridgeQuery(['core.nodeState']);
 	const platform = usePlatform();
 	const debugState = useDebugState();
 

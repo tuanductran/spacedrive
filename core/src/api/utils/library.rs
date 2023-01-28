@@ -91,7 +91,8 @@ where
 				let resolver = resolver.clone();
 				async move {
 					let library = ctx
-						.library_manager
+						.library_manager()
+						.await
 						.get_ctx(arg.library_id)
 						.await
 						.ok_or_else(|| {
@@ -137,7 +138,8 @@ where
 				let resolver = resolver.clone();
 				async move {
 					let library = ctx
-						.library_manager
+						.library_manager()
+						.await
 						.get_ctx(arg.library_id)
 						.await
 						.ok_or_else(|| {
@@ -174,7 +176,7 @@ where
 			t(move |ctx, arg: LibraryArgs<TArg>| {
 				// TODO(@Oscar): Upstream rspc work to allow this to work
 				// let library = ctx
-				// 	.library_manager
+				// 	.library_manager().await
 				// 	.get_ctx(arg.library_id)
 				// 	.await
 				// 	.ok_or_else(|| {

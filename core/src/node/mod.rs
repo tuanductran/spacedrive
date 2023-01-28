@@ -1,14 +1,20 @@
-use crate::prisma::node;
+use crate::{prisma::node, NodeError};
 
 use chrono::{DateTime, Utc};
 use int_enum::IntEnum;
 use rspc::Type;
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 use uuid::Uuid;
 
 mod config;
 
 pub use config::*;
+
+pub(crate) struct NodeReboot {
+	pub force: bool,
+	pub done_tx: oneshot::Sender<Result<(), NodeError>>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LibraryNode {

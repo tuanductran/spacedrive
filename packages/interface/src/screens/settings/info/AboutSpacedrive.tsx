@@ -4,7 +4,7 @@ import { SettingsContainer } from '../../../components/settings/SettingsContaine
 import { SettingsHeader } from '../../../components/settings/SettingsHeader';
 
 export default function AboutSpacedrive() {
-	const buildInfo = useBridgeQuery(['buildInfo']);
+	const buildInfo = useBridgeQuery(['core.buildInfo']);
 
 	return (
 		<SettingsContainer>

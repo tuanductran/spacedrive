@@ -3,7 +3,8 @@
 
 export type Procedures = {
     queries: 
-        { key: "buildInfo", input: never, result: BuildInfo } | 
+        { key: "core.buildInfo", input: never, result: BuildInfo } | 
+        { key: "core.nodeState", input: never, result: NodeState } | 
         { key: "files.get", input: LibraryArgs<GetArgs>, result: { id: number, pub_id: Array<number>, name: string | null, extension: string | null, kind: number, size_in_bytes: string, key_id: number | null, hidden: boolean, favorite: boolean, important: boolean, has_thumbnail: boolean, has_thumbstrip: boolean, has_video_preview: boolean, ipfs_id: string | null, note: string | null, date_created: string, date_modified: string, date_indexed: string, file_paths: Array<FilePath>, media_data: MediaData | null } | null } | 
         { key: "jobs.getHistory", input: LibraryArgs<null>, result: Array<JobReport> } | 
         { key: "jobs.getRunning", input: LibraryArgs<null>, result: Array<JobReport> } | 
@@ -21,7 +22,6 @@ export type Procedures = {
         { key: "locations.indexer_rules.get", input: LibraryArgs<number>, result: IndexerRule } | 
         { key: "locations.indexer_rules.list", input: LibraryArgs<null>, result: Array<IndexerRule> } | 
         { key: "locations.list", input: LibraryArgs<null>, result: Array<{ id: number, pub_id: Array<number>, node_id: number, name: string | null, local_path: string | null, total_capacity: number | null, available_capacity: number | null, filesystem: string | null, disk_type: number | null, is_removable: boolean | null, is_online: boolean, is_archived: boolean, date_created: string, node: Node }> } | 
-        { key: "nodeState", input: never, result: NodeState } | 
         { key: "normi.composite", input: never, result: NormalisedCompositeId } | 
         { key: "normi.org", input: never, result: NormalisedOrganisation } | 
         { key: "normi.user", input: never, result: NormalisedUser } | 
@@ -33,6 +33,8 @@ export type Procedures = {
         { key: "tags.list", input: LibraryArgs<null>, result: Array<Tag> } | 
         { key: "volumes.list", input: never, result: Array<Volume> },
     mutations: 
+        { key: "core.reboot", input: boolean, result: null } | 
+        { key: "core.updateNodeConfig", input: NodeConfig, result: NodeConfig } | 
         { key: "files.copyFiles", input: LibraryArgs<FileCopierJobInit>, result: null } | 
         { key: "files.cutFiles", input: LibraryArgs<FileCutterJobInit>, result: null } | 
         { key: "files.decryptFiles", input: LibraryArgs<FileDecryptorJobInit>, result: null } | 

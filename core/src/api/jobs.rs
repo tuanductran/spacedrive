@@ -13,15 +13,17 @@ use rspc::{ErrorCode, Type};
 use serde::Deserialize;
 use std::path::PathBuf;
 
-use super::{utils::LibraryRequest, CoreEvent, RouterBuilder};
+use super::{utils::LibraryRequest, CoreEvent, Ctx, RouterBuilder};
 
 pub(crate) fn mount() -> RouterBuilder {
 	<RouterBuilder>::new()
 		.library_query("getRunning", |t| {
-			t(|ctx, _: (), _| async move { Ok(ctx.jobs.get_running().await) })
+			t(|ctx: Ctx, _: (), _| async move { Ok(ctx.jobs().await.get_running().await) })
 		})
 		.library_query("isRunning", |t| {
-			t(|ctx, _: (), _| async move { Ok(!ctx.jobs.get_running().await.is_empty()) })
+			t(
+				|ctx: Ctx, _: (), _| async move { Ok(!ctx.jobs().await.get_running().await.is_empty()) },
+			)
 		})
 		.library_query("getHistory", |t| {
 			t(|_, _: (), library| async move { Ok(JobManager::get_history(&library).await?) })
@@ -124,7 +126,7 @@ pub(crate) fn mount() -> RouterBuilder {
 			})
 		})
 		.library_subscription("newThumbnail", |t| {
-			t(|ctx, _: (), _| {
+			t(|ctx: Ctx, _: (), _| {
 				// TODO: Only return event for the library that was subscribed to
 
 				let mut event_bus_rx = ctx.event_bus.subscribe();

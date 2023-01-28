@@ -170,8 +170,8 @@ function IsRunningJob() {
 }
 
 function DebugPanel() {
-	const buildInfo = useBridgeQuery(['buildInfo']);
-	const nodeState = useBridgeQuery(['nodeState']);
+	const buildInfo = useBridgeQuery(['core.buildInfo']);
+	const nodeState = useBridgeQuery(['core.nodeState']);
 	const debugState = useDebugState();
 	const platform = usePlatform();
 

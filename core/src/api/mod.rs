@@ -1,17 +1,30 @@
-use std::{
-	sync::Arc,
-	time::{Duration, Instant},
-};
-
-use rspc::{Config, Type};
-use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
-
 use crate::{
 	job::JobManager,
 	library::LibraryManager,
-	node::{NodeConfig, NodeConfigManager},
+	node::{NodeConfigManager, NodeReboot},
+	NodeError,
 };
+
+use std::sync::Arc;
+
+use rspc::{Config, Type};
+use serde::Serialize;
+use tokio::sync::oneshot;
+use tokio::{
+	sync::{broadcast, mpsc, RwLock, RwLockReadGuard},
+	time::{Duration, Instant},
+};
+
+mod core;
+mod files;
+mod jobs;
+mod keys;
+mod libraries;
+mod locations;
+mod normi;
+mod tags;
+pub mod utils;
+pub mod volumes;
 
 use utils::{InvalidRequests, InvalidateOperationEvent};
 
@@ -28,27 +41,36 @@ pub enum CoreEvent {
 
 /// Is provided when executing the router from the request.
 pub struct Ctx {
-	pub library_manager: Arc<LibraryManager>,
+	pub library_manager: Arc<RwLock<Arc<LibraryManager>>>,
 	pub config: Arc<NodeConfigManager>,
-	pub jobs: Arc<JobManager>,
+	pub jobs: Arc<RwLock<Arc<JobManager>>>,
 	pub event_bus: broadcast::Sender<CoreEvent>,
+	pub(super) reboot_tx: mpsc::Sender<NodeReboot>,
 }
 
-mod files;
-mod jobs;
-mod keys;
-mod libraries;
-mod locations;
-mod normi;
-mod tags;
-pub mod utils;
-pub mod volumes;
+impl Ctx {
+	async fn reboot(&self, force: bool) -> Result<(), NodeError> {
+		let (done_tx, done_rx) = oneshot::channel();
 
-#[derive(Serialize, Deserialize, Debug, Type)]
-struct NodeState {
-	#[serde(flatten)]
-	config: NodeConfig,
-	data_path: String,
+		self.reboot_tx
+			.send(NodeReboot { force, done_tx })
+			.await
+			.map_err(|_| NodeError::Reboot("Failed to send reboot request".to_string()))?;
+
+		done_rx.await.unwrap_or_else(|_| {
+			Err(NodeError::Reboot(
+				"Failed to receive reboot response".to_string(),
+			))
+		})
+	}
+
+	async fn jobs(&self) -> RwLockReadGuard<Arc<JobManager>> {
+		self.jobs.read().await
+	}
+
+	async fn library_manager(&self) -> RwLockReadGuard<Arc<LibraryManager>> {
+		self.library_manager.read().await
+	}
 }
 
 pub(crate) fn mount() -> Arc<Router> {
@@ -61,32 +83,7 @@ pub(crate) fn mount() -> Arc<Router> {
 
 	let r = <Router>::new()
 		.config(config)
-		.query("buildInfo", |t| {
-			#[derive(Serialize, Type)]
-			pub struct BuildInfo {
-				version: &'static str,
-				commit: &'static str,
-			}
-
-			t(|_, _: ()| BuildInfo {
-				version: env!("CARGO_PKG_VERSION"),
-				commit: env!("GIT_HASH"),
-			})
-		})
-		.query("nodeState", |t| {
-			t(|ctx, _: ()| async move {
-				Ok(NodeState {
-					config: ctx.config.get().await,
-					// We are taking the assumption here that this value is only used on the frontend for display purposes
-					data_path: ctx
-						.config
-						.data_directory()
-						.to_str()
-						.expect("Found non-UTF-8 path")
-						.to_string(),
-				})
-			})
-		})
+		.merge("core.", core::mount())
 		.merge("normi.", normi::mount())
 		.merge("library.", libraries::mount())
 		.merge("volumes.", volumes::mount())
@@ -97,7 +94,7 @@ pub(crate) fn mount() -> Arc<Router> {
 		.merge("jobs.", jobs::mount())
 		// TODO: Scope the invalidate queries to a specific library (filtered server side)
 		.subscription("invalidateQuery", |t| {
-			t(|ctx, _: ()| {
+			t(|ctx: Ctx, _: ()| {
 				let mut event_bus_rx = ctx.event_bus.subscribe();
 				let mut last = Instant::now();
 				async_stream::stream! {
@@ -119,7 +116,7 @@ pub(crate) fn mount() -> Arc<Router> {
 		})
 		.build()
 		.arced();
-	InvalidRequests::validate(r.clone()); // This validates all invalidation calls.
+	InvalidRequests::validate(Arc::clone(&r)); // This validates all invalidation calls.
 
 	r
 }

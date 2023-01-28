@@ -1,13 +1,13 @@
+use std::path::{Path, PathBuf};
+
 use rspc::Type;
 use serde::{Deserialize, Serialize};
-use std::{
-	fs::File,
-	io::{self, BufReader, Seek, SeekFrom, Write},
-	path::{Path, PathBuf},
-	sync::Arc,
-};
 use thiserror::Error;
-use tokio::sync::{RwLock, RwLockWriteGuard};
+use tokio::{
+	fs, io,
+	sync::{RwLock, RwLockWriteGuard},
+};
+use tracing::error;
 use uuid::Uuid;
 
 /// NODE_STATE_CONFIG_NAME is the name of the file which stores the NodeState
@@ -15,7 +15,7 @@ pub const NODE_STATE_CONFIG_NAME: &str = "node_state.sdconfig";
 
 /// ConfigMetadata is a part of node configuration that is loaded before the main configuration and contains information about the schema of the config.
 /// This allows us to migrate breaking changes to the config format between Spacedrive releases.
-#[derive(Debug, Serialize, Deserialize, Clone, Type)]
+#[derive(Debug, Serialize, Deserialize, Clone, Type, PartialEq, Eq)]
 pub struct ConfigMetadata {
 	/// version of Spacedrive. Determined from `CARGO_PKG_VERSION` environment variable.
 	pub version: Option<String>,
@@ -50,11 +50,11 @@ pub struct NodeConfig {
 
 #[derive(Error, Debug)]
 pub enum NodeConfigError {
-	#[error("error saving or loading the config from the filesystem")]
+	#[error("error saving or loading the config from the filesystem: {0}")]
 	IO(#[from] io::Error),
-	#[error("error serializing or deserializing the JSON in the config file")]
+	#[error("error serializing or deserializing the JSON in the config file: {0}")]
 	Json(#[from] serde_json::Error),
-	#[error("error migrating the config file")]
+	#[error("error migrating the config file: {0}")]
 	Migration(String),
 }
 
@@ -62,41 +62,47 @@ impl NodeConfig {
 	fn default() -> Self {
 		NodeConfig {
 			id: Uuid::new_v4(),
-			name: match hostname::get() {
+			name: hostname::get()
 				// SAFETY: This is just for display purposes so it doesn't matter if it's lossy
-				Ok(hostname) => hostname.to_string_lossy().into_owned(),
-				Err(err) => {
-					eprintln!("Falling back to default node name as an error occurred getting your systems hostname: '{}'", err);
+				.map(|hostname| hostname.to_string_lossy().into_owned())
+				.unwrap_or_else(|err| {
+					error!(
+						"Falling back to default node name as an error \
+						occurred getting your systems hostname: '{err}'"
+					);
 					"my-spacedrive".into()
-				}
-			},
+				}),
 			p2p_port: None,
-			metadata: ConfigMetadata {
-				version: Some(env!("CARGO_PKG_VERSION").into()),
-			},
+			metadata: Default::default(),
 		}
 	}
 }
 
-pub struct NodeConfigManager(RwLock<NodeConfig>, PathBuf);
+pub struct NodeConfigManager {
+	config: RwLock<NodeConfig>,
+	data_directory: PathBuf,
+	config_filepath: PathBuf,
+}
 
 impl NodeConfigManager {
 	/// new will create a new NodeConfigManager with the given path to the config file.
-	pub(crate) async fn new(data_path: PathBuf) -> Result<Arc<Self>, NodeConfigError> {
-		Ok(Arc::new(Self(
-			RwLock::new(Self::read(&data_path).await?),
-			data_path,
-		)))
+	pub(crate) async fn new(data_directory: impl AsRef<Path>) -> Result<Self, NodeConfigError> {
+		let data_directory = data_directory.as_ref().to_path_buf();
+		Ok(Self {
+			config: RwLock::new(Self::read(&data_directory).await?),
+			config_filepath: data_directory.join(NODE_STATE_CONFIG_NAME),
+			data_directory,
+		})
 	}
 
 	/// get will return the current NodeConfig in a read only state.
 	pub(crate) async fn get(&self) -> NodeConfig {
-		self.0.read().await.clone()
+		self.config.read().await.clone()
 	}
 
 	/// data_directory returns the path to the directory storing the configuration data.
 	pub(crate) fn data_directory(&self) -> PathBuf {
-		self.1.clone()
+		self.data_directory.clone()
 	}
 
 	/// write allows the user to update the configuration. This is done in a closure while a Mutex lock is held so that the user can't cause a race condition if the config were to be updated in multiple parts of the app at the same time.
@@ -105,52 +111,69 @@ impl NodeConfigManager {
 		&self,
 		mutation_fn: F,
 	) -> Result<NodeConfig, NodeConfigError> {
-		mutation_fn(self.0.write().await);
-		let config = self.0.read().await;
-		Self::save(&self.1, &config).await?;
+		mutation_fn(self.config.write().await);
+		let config = self.config.read().await;
+		Self::save_to_file(&self.config_filepath, &config).await?;
 		Ok(config.clone())
 	}
 
 	/// read will read the configuration from disk and return it.
-	async fn read(base_path: &PathBuf) -> Result<NodeConfig, NodeConfigError> {
-		let path = Path::new(base_path).join(NODE_STATE_CONFIG_NAME);
+	async fn read(config_filepath: impl AsRef<Path>) -> Result<NodeConfig, NodeConfigError> {
+		let config_filepath = config_filepath.as_ref();
 
-		match path.try_exists().unwrap() {
-			true => {
-				let mut file = File::open(&path)?;
-				let base_config: ConfigMetadata =
-					serde_json::from_reader(BufReader::new(&mut file))?;
+		match fs::metadata(config_filepath).await {
+			Ok(_) => {
+				// TODO: In the future use a async `from_reader` in serde_json to partially read from disk
+				let mut config =
+					serde_json::from_slice::<NodeConfig>(&fs::read(config_filepath).await?)?;
 
-				Self::migrate_config(base_config.version, path)?;
+				if Self::migrate_config(&config.metadata, config_filepath).await? {
+					// Reloading config, as we had to migrate the config file
+					config =
+						serde_json::from_slice::<NodeConfig>(&fs::read(config_filepath).await?)?;
+				}
 
-				file.seek(SeekFrom::Start(0))?;
-				Ok(serde_json::from_reader(BufReader::new(&mut file))?)
-			}
-			false => {
-				let config = NodeConfig::default();
-				Self::save(base_path, &config).await?;
 				Ok(config)
 			}
+			Err(e) if e.kind() == io::ErrorKind::NotFound => {
+				let config = NodeConfig::default();
+				Self::save_to_file(config_filepath, &config).await?;
+				Ok(config)
+			}
+			Err(e) => return Err(e.into()),
 		}
 	}
 
-	/// save will write the configuration back to disk
-	async fn save(base_path: &PathBuf, config: &NodeConfig) -> Result<(), NodeConfigError> {
-		let path = Path::new(base_path).join(NODE_STATE_CONFIG_NAME);
-		File::create(path)?.write_all(serde_json::to_string(config)?.as_bytes())?;
-		Ok(())
+	/// Inner static method to actually save a config in disk
+	async fn save_to_file(
+		config_filepath: impl AsRef<Path>,
+		config: &NodeConfig,
+	) -> Result<(), NodeConfigError> {
+		fs::write(config_filepath, serde_json::to_vec(config)?)
+			.await
+			.map_err(Into::into)
 	}
 
-	/// migrate_config is a function used to apply breaking changes to the config file.
-	fn migrate_config(
-		current_version: Option<String>,
-		config_path: PathBuf,
-	) -> Result<(), NodeConfigError> {
-		match current_version {
-			None => {
-				Err(NodeConfigError::Migration(format!("Your Spacedrive config file stored at '{}' is missing the `version` field. If you just upgraded please delete the file and restart Spacedrive! Please note this upgrade will stop using your old 'library.db' as the folder structure has changed.", config_path.display())))
-			}
-			_ => Ok(()),
+	/// Migrate_config is a function used to apply breaking changes to the config file.
+	async fn migrate_config(
+		current_config_metadata: &ConfigMetadata,
+		config_filepath: impl AsRef<Path>,
+	) -> Result<bool, NodeConfigError> {
+		// If the received version is the default one, so we don't need to migrate the config file
+		if current_config_metadata == &ConfigMetadata::default() {
+			return Ok(false);
+		}
+
+		match current_config_metadata.version {
+			None => Err(NodeConfigError::Migration(format!(
+				"Your Spacedrive config file stored at '{}' is missing the `version` \
+					field. If you just upgraded please delete the file and restart Spacedrive! \
+					Please note this upgrade will stop using your old 'library.db' as the \
+					folder structure has changed.",
+				config_filepath.as_ref().display()
+			))),
+			// TODO: When we need a config migration, fill in for a new match arm with Some("version")
+			_ => Ok(true),
 		}
 	}
 }

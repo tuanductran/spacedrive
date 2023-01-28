@@ -10,15 +10,10 @@ rust-version = "1.67.0"
 
 [features]
 default = ["p2p"]
-p2p = [
-] # This feature controls whether the Spacedrive Core contains the Peer to Peer syncing engine (It isn't required for the hosted core so we can disable it).
-mobile = [
-] # This feature allows features to be disabled when the Core is running on mobile.
+p2p = [] # This feature controls whether the Spacedrive Core contains the Peer to Peer syncing engine (It isn't required for the hosted core so we can disable it).
+mobile = [] # This feature allows features to be disabled when the Core is running on mobile.
 android = ["dep:tracing-android"]
-ffmpeg = [
-  "dep:ffmpeg-next",
-  "dep:sd-ffmpeg",
-] # This feature controls whether the Spacedrive Core contains functionality which requires FFmpeg.
+ffmpeg = ["dep:ffmpeg-next", "dep:sd-ffmpeg"] # This feature controls whether the Spacedrive Core contains functionality which requires FFmpeg.
 location-watcher = ["dep:notify"]
 
 [dependencies]
@@ -50,6 +45,7 @@ tokio = { workspace = true, features = [
   "io-util",
   "macros",
   "time",
+  "parking_lot"
 ] }
 include_dir = { version = "0.7.2", features = ["glob"] }
 async-trait = "^0.1.57"

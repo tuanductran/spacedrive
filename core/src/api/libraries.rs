@@ -4,7 +4,6 @@ use crate::{
 	volume::{get_volumes, save_volume},
 };
 
-use super::{utils::LibraryRequest, RouterBuilder};
 use chrono::Utc;
 use fs_extra::dir::get_size; // TODO: Remove this dependency as it is sync instead of async
 use rspc::Type;
@@ -16,10 +15,14 @@ use serde::Deserialize;
 use tokio::fs;
 use uuid::Uuid;
 
+use super::{utils::LibraryRequest, Ctx, RouterBuilder};
+
 pub(crate) fn mount() -> RouterBuilder {
-	<RouterBuilder>::new()
+	RouterBuilder::new()
 		.query("list", |t| {
-			t(|ctx, _: ()| async move { ctx.library_manager.get_all_libraries_config().await })
+			t(|ctx: Ctx, _: ()| async move {
+				ctx.library_manager().await.get_all_libraries_config().await
+			})
 		})
 		.library_query("getStatistics", |t| {
 			t(|_, _: (), library| async move {
@@ -86,9 +89,10 @@ pub(crate) fn mount() -> RouterBuilder {
 				hashing_algorithm: HashingAlgorithm,
 			}
 
-			t(|ctx, args: CreateLibraryArgs| async move {
+			t(|ctx: Ctx, args: CreateLibraryArgs| async move {
 				Ok(ctx
-					.library_manager
+					.library_manager()
+					.await
 					.create(
 						LibraryConfig {
 							name: args.name.to_string(),
@@ -112,14 +116,17 @@ pub(crate) fn mount() -> RouterBuilder {
 				pub description: Option<String>,
 			}
 
-			t(|ctx, args: EditLibraryArgs| async move {
+			t(|ctx: Ctx, args: EditLibraryArgs| async move {
 				Ok(ctx
-					.library_manager
+					.library_manager()
+					.await
 					.edit(args.id, args.name, args.description)
 					.await?)
 			})
 		})
 		.mutation("delete", |t| {
-			t(|ctx, id: Uuid| async move { Ok(ctx.library_manager.delete_library(id).await?) })
+			t(|ctx: Ctx, id: Uuid| async move {
+				Ok(ctx.library_manager().await.delete_library(id).await?)
+			})
 		})
 }
