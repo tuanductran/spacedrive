@@ -16,7 +16,7 @@
 //! let master_password = Protected::new(b"password".to_vec());
 //!
 //! // Initialise a `Keymanager` with no stored keys and no master password
-//! let mut key_manager = KeyManager::new(vec![], None);
+//! let mut key_manager = KeyManager::new(vec![]);
 //!
 //! // Set the master password
 //! key_manager.set_master_password(master_password);
@@ -64,7 +64,7 @@ use super::hashing::HashingAlgorithm;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "rspc", derive(specta::Type))]
 pub struct StoredKey {
-	pub uuid: uuid::Uuid, // uuid for identification. shared with mounted keys
+	pub uuid: Uuid, // uuid for identification. shared with mounted keys
 	pub version: StoredKeyVersion,
 	pub algorithm: Algorithm, // encryption algorithm for encrypting the master key. can be changed (requires a re-encryption though)
 	pub hashing_algorithm: HashingAlgorithm, // hashing algorithm used for hashing the key with the content salt
@@ -148,7 +148,7 @@ impl KeyManager {
 		)?;
 
 		let salt = generate_salt();
-		let uuid = uuid::Uuid::nil();
+		let uuid = Uuid::nil();
 
 		// Generate items we'll need for encryption
 		let master_key = generate_master_key();
@@ -257,7 +257,7 @@ impl KeyManager {
 			secret_key,
 		)?;
 
-		let uuid = uuid::Uuid::nil();
+		let uuid = Uuid::nil();
 
 		// Generate items we'll need for encryption
 		let master_key = generate_master_key();
@@ -660,7 +660,7 @@ impl KeyManager {
 		automount: bool,
 		content_salt: Option<Salt>,
 	) -> Result<Uuid> {
-		let uuid = uuid::Uuid::new_v4();
+		let uuid = Uuid::new_v4();
 
 		// Generate items we'll need for encryption
 		let key_nonce = generate_nonce(algorithm);

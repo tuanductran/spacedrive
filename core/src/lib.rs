@@ -118,13 +118,13 @@ impl Node {
 		let (reboot_tx, reboot_rx) = mpsc::channel(1);
 		let config = Arc::new(NodeConfigManager::new(&data_dir).await?);
 
-		let jobs = JobManager::new();
+		let job_manager = JobManager::new();
 		let location_manager = LocationManager::new();
 		let library_manager = LibraryManager::new(
 			data_dir.join("libraries"),
 			NodeContext {
 				config: Arc::clone(&config),
-				jobs: Arc::clone(&jobs),
+				jobs: Arc::clone(&job_manager),
 				location_manager: Arc::clone(&location_manager),
 				event_bus_tx: event_bus.0.clone(),
 			},
@@ -133,17 +133,9 @@ impl Node {
 
 		Self::setup_location_management(&library_manager, &location_manager).await;
 
-		// Trying to resume possible paused jobs
-		let inner_library_manager = Arc::clone(&library_manager);
-		let inner_jobs = Arc::clone(&jobs);
-		tokio::spawn(async move {
-			for library_ctx in inner_library_manager.get_all_libraries_ctx().await {
-				if let Err(e) = Arc::clone(&inner_jobs).resume_jobs(&library_ctx).await {
-					error!("Failed to resume jobs for library. {:#?}", e);
-				}
-			}
-		});
-		let jobs = Arc::new(RwLock::new(jobs));
+		Self::resume_paused_jobs(Arc::clone(&library_manager), Arc::clone(&job_manager));
+
+		let jobs = Arc::new(RwLock::new(job_manager));
 		let library_manager = Arc::new(RwLock::new(library_manager));
 
 		tokio::spawn(Self::handle_reboot(
@@ -248,6 +240,16 @@ impl Node {
 		}
 	}
 
+	fn resume_paused_jobs(library_manager: Arc<LibraryManager>, job_manager: Arc<JobManager>) {
+		tokio::spawn(async move {
+			for library_ctx in library_manager.get_all_libraries_ctx().await {
+				if let Err(e) = Arc::clone(&job_manager).resume_jobs(&library_ctx).await {
+					error!("Failed to resume jobs for library. {:#?}", e);
+				}
+			}
+		});
+	}
+
 	async fn handle_reboot(
 		mut reboot_rx: mpsc::Receiver<NodeReboot>,
 		library_manager: Arc<RwLock<Arc<LibraryManager>>>,
@@ -255,39 +257,39 @@ impl Node {
 		config: Arc<NodeConfigManager>,
 		event_bus_tx: broadcast::Sender<CoreEvent>,
 	) {
-		async fn inner(
-			force_reboot: bool,
-			library_manager: Arc<RwLock<Arc<LibraryManager>>>,
-			jobs: Arc<RwLock<Arc<JobManager>>>,
-			config: Arc<NodeConfigManager>,
-			event_bus_tx: broadcast::Sender<CoreEvent>,
-		) -> Result<(), NodeError> {
-			if force_reboot {
-				let new_job_manager = JobManager::new();
+		let inner = |force_reboot: bool,
+		             library_manager: Arc<RwLock<Arc<LibraryManager>>>,
+		             jobs: Arc<RwLock<Arc<JobManager>>>,
+		             config: Arc<NodeConfigManager>,
+		             event_bus_tx: broadcast::Sender<CoreEvent>| {
+			async move {
+				if force_reboot {
+					let new_job_manager = JobManager::new();
 
-				let location_manager = LocationManager::new();
+					let location_manager = LocationManager::new();
 
-				let new_library_manager = LibraryManager::new(
-					config.data_directory(),
-					NodeContext {
-						config: Arc::clone(&config),
-						jobs: Arc::clone(&new_job_manager),
-						location_manager: Arc::clone(&location_manager),
-						event_bus_tx: event_bus_tx.clone(),
-					},
-				)
-				.await?;
+					let new_library_manager = LibraryManager::new(
+						config.data_directory(),
+						NodeContext {
+							config: Arc::clone(&config),
+							jobs: Arc::clone(&new_job_manager),
+							location_manager: Arc::clone(&location_manager),
+							event_bus_tx: event_bus_tx.clone(),
+						},
+					)
+					.await?;
 
-				Node::setup_location_management(&new_library_manager, &location_manager).await;
+					Self::setup_location_management(&new_library_manager, &location_manager).await;
 
-				*library_manager.write().await = new_library_manager;
-				*jobs.write().await = new_job_manager;
-			} else {
-				todo!("Graceful reboot");
+					*library_manager.write().await = new_library_manager;
+					*jobs.write().await = new_job_manager;
+				} else {
+					todo!("Graceful reboot");
+				}
+
+				Ok::<(), NodeError>(())
 			}
-
-			Ok(())
-		}
+		};
 
 		while let Some(reboot) = reboot_rx.recv().await {
 			if reboot

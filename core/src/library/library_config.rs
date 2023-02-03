@@ -1,15 +1,11 @@
-use std::{
-	fs::File,
-	io::{BufReader, Seek, SeekFrom},
-	path::PathBuf,
-};
+use crate::node::ConfigMetadata;
+
+use std::path::Path;
 
 use rspc::Type;
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use tokio::fs;
 use uuid::Uuid;
-
-use crate::node::ConfigMetadata;
 
 use super::LibraryManagerError;
 
@@ -29,35 +25,47 @@ pub struct LibraryConfig {
 
 impl LibraryConfig {
 	/// read will read the configuration from disk and return it.
-	pub(super) async fn read(file_dir: PathBuf) -> Result<LibraryConfig, LibraryManagerError> {
-		let mut file = File::open(&file_dir)?;
-		let base_config: ConfigMetadata = serde_json::from_reader(BufReader::new(&mut file))?;
+	pub(super) async fn read(
+		config_path: impl AsRef<Path>,
+	) -> Result<LibraryConfig, LibraryManagerError> {
+		let config_path = config_path.as_ref();
 
-		Self::migrate_config(base_config.version, file_dir)?;
+		// TODO: In the future use a async `from_reader` in serde_json to partially read from disk
+		Self::migrate_config(
+			&serde_json::from_slice::<ConfigMetadata>(&fs::read(config_path).await?)?,
+			config_path,
+		)
+		.await?;
 
-		file.seek(SeekFrom::Start(0))?;
-		Ok(serde_json::from_reader(BufReader::new(&mut file))?)
+		serde_json::from_slice(&fs::read(config_path).await?).map_err(Into::into)
 	}
 
 	/// save will write the configuration back to disk
 	pub(super) async fn save(
-		file_dir: PathBuf,
+		file_dir: impl AsRef<Path>,
 		config: &LibraryConfig,
 	) -> Result<(), LibraryManagerError> {
-		File::create(file_dir)?.write_all(serde_json::to_string(config)?.as_bytes())?;
-		Ok(())
+		fs::write(file_dir, serde_json::to_vec(config)?)
+			.await
+			.map_err(Into::into)
 	}
 
 	/// migrate_config is a function used to apply breaking changes to the library config file.
-	fn migrate_config(
-		current_version: Option<String>,
-		config_path: PathBuf,
+	async fn migrate_config(
+		current_config_metadata: &ConfigMetadata,
+		config_path: impl AsRef<Path>,
 	) -> Result<(), LibraryManagerError> {
-		match current_version {
+		// If the received version is the default one, so we don't need to migrate the config file
+		if current_config_metadata == &ConfigMetadata::default() {
+			return Ok(());
+		}
+
+		match current_config_metadata.version {
 			None => Err(LibraryManagerError::Migration(format!(
 				"Your Spacedrive library at '{}' is missing the `version` field",
-				config_path.display()
+				config_path.as_ref().display()
 			))),
+			// TODO: When we need a config migration, fill in for a new match arm with Some("version")
 			_ => Ok(()),
 		}
 	}

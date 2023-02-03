@@ -15,13 +15,13 @@ use sd_crypto::{
 	primitives::{to_array, OnboardingConfig},
 };
 use std::{
-	env, fs, io,
+	env,
 	path::{Path, PathBuf},
 	str::FromStr,
 	sync::Arc,
 };
 use thiserror::Error;
-use tokio::sync::RwLock;
+use tokio::{fs, io, sync::RwLock, try_join};
 use uuid::Uuid;
 
 use super::{LibraryConfig, LibraryConfigWrapped, LibraryContext};
@@ -75,15 +75,15 @@ pub async fn seed_keymanager(
 	let mut default = None;
 
 	// collect and serialize the stored keys
-	let stored_keys: Vec<StoredKey> = client
+	let stored_keys = client
 		.key()
 		.find_many(vec![])
 		.exec()
 		.await?
-		.iter()
+		.into_iter()
 		.map(|key| {
-			let key = key.clone();
-			let uuid = uuid::Uuid::from_str(&key.uuid).unwrap();
+			// SAFETY: This unwrap is alright as we generated the uuid for the key before
+			let uuid = Uuid::from_str(&key.uuid).unwrap();
 
 			if key.default {
 				default = Some(uuid);
@@ -107,8 +107,7 @@ pub async fn seed_keymanager(
 				automount: key.automount,
 			})
 		})
-		.collect::<Result<Vec<StoredKey>, sd_crypto::Error>>()
-		.unwrap();
+		.collect::<Result<Vec<_>, sd_crypto::Error>>()?;
 
 	// insert all keys from the DB into the keymanager's keystore
 	km.populate_keystore(stored_keys).await?;
@@ -123,53 +122,59 @@ impl LibraryManager {
 	pub(crate) async fn new(
 		libraries_dir: PathBuf,
 		node_context: NodeContext,
-	) -> Result<Arc<Self>, LibraryManagerError> {
-		fs::create_dir_all(&libraries_dir)?;
+	) -> Result<Self, LibraryManagerError> {
+		fs::create_dir_all(&libraries_dir).await?;
 
 		let mut libraries = Vec::new();
-		for entry in fs::read_dir(&libraries_dir)?
-			.into_iter()
-			.filter_map(|entry| entry.ok())
-			.filter(|entry| {
-				entry.path().is_file()
-					&& entry
-						.path()
-						.extension()
-						.map(|v| v == "sdlibrary")
-						.unwrap_or(false)
-			}) {
+		let mut libraries_read_dir = fs::read_dir(&libraries_dir).await?;
+
+		while let Some(entry) = libraries_read_dir.next_entry().await? {
 			let config_path = entry.path();
-			let library_id = match Path::new(&config_path)
-				.file_stem()
-				.map(|v| v.to_str().map(Uuid::from_str))
+			if entry.file_type().await?.is_file()
+				&& config_path
+					.extension()
+					.map(|v| v == "sdlibrary")
+					.unwrap_or(false)
 			{
-				Some(Some(Ok(id))) => id,
-				_ => {
-					println!("Attempted to load library from path '{}' but it has an invalid filename. Skipping...", config_path.display());
+				let Some(Ok(library_id)) = config_path.file_stem().and_then(|stem| stem.to_str().map(Uuid::from_str)) else {
+					println!(
+						"Attempted to load library from path '{}' but it has \
+						an invalid filename. Skipping...",
+						config_path.display()
+					);
 					continue;
+				};
+
+				let db_path = config_path.with_extension("db");
+				match fs::metadata(&db_path).await {
+					Ok(_) => {}
+					Err(e) if e.kind() == io::ErrorKind::NotFound => {
+						println!(
+							"Found library '{}' <id='{library_id}'> but no matching database file was found. Skipping...",
+							config_path.display()
+						);
+						continue;
+					}
+					Err(e) => return Err(e.into()),
 				}
-			};
 
-			let db_path = config_path.clone().with_extension("db");
-			if !db_path.try_exists().unwrap() {
-				println!(
-					"Found library '{}' but no matching database file was found. Skipping...",
-					config_path.display()
+				libraries.push(
+					Self::load(
+						library_id,
+						&db_path,
+						LibraryConfig::read(config_path).await?,
+						node_context.clone(),
+					)
+					.await?,
 				);
-				continue;
 			}
-
-			let config = LibraryConfig::read(config_path).await?;
-			libraries.push(Self::load(library_id, &db_path, config, node_context.clone()).await?);
 		}
 
-		let this = Arc::new(Self {
+		Ok(Self {
 			libraries: RwLock::new(libraries),
 			libraries_dir,
 			node_context,
-		});
-
-		Ok(this)
+		})
 	}
 
 	/// create creates a new library with the given config and mounts it into the running [LibraryManager].
@@ -179,11 +184,7 @@ impl LibraryManager {
 		km_config: OnboardingConfig,
 	) -> Result<LibraryConfigWrapped, LibraryManagerError> {
 		let id = Uuid::new_v4();
-		LibraryConfig::save(
-			Path::new(&self.libraries_dir).join(format!("{id}.sdlibrary")),
-			&config,
-		)
-		.await?;
+		LibraryConfig::save(self.libraries_dir.join(format!("{id}.sdlibrary")), &config).await?;
 
 		let library = Self::load(
 			id,
@@ -248,7 +249,7 @@ impl LibraryManager {
 		}
 
 		LibraryConfig::save(
-			Path::new(&self.libraries_dir).join(format!("{id}.sdlibrary")),
+			self.libraries_dir.join(format!("{id}.sdlibrary")),
 			&library.config,
 		)
 		.await?;
@@ -266,8 +267,10 @@ impl LibraryManager {
 			.find(|l| l.id == id)
 			.ok_or(LibraryManagerError::LibraryNotFound)?;
 
-		fs::remove_file(Path::new(&self.libraries_dir).join(format!("{}.db", library.id)))?;
-		fs::remove_file(Path::new(&self.libraries_dir).join(format!("{}.sdlibrary", library.id)))?;
+		try_join!(
+			fs::remove_file(self.libraries_dir.join(format!("{}.db", library.id))),
+			fs::remove_file(self.libraries_dir.join(format!("{}.sdlibrary", library.id)))
+		)?;
 
 		invalidate_query!(library, "library.list");
 

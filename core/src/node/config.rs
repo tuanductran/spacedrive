@@ -124,16 +124,14 @@ impl NodeConfigManager {
 		match fs::metadata(config_filepath).await {
 			Ok(_) => {
 				// TODO: In the future use a async `from_reader` in serde_json to partially read from disk
-				let mut config =
-					serde_json::from_slice::<NodeConfig>(&fs::read(config_filepath).await?)?;
+				Self::migrate_config(
+					&serde_json::from_slice::<ConfigMetadata>(&fs::read(config_filepath).await?)?,
+					config_filepath,
+				)
+				.await?;
 
-				if Self::migrate_config(&config.metadata, config_filepath).await? {
-					// Reloading config, as we had to migrate the config file
-					config =
-						serde_json::from_slice::<NodeConfig>(&fs::read(config_filepath).await?)?;
-				}
-
-				Ok(config)
+				serde_json::from_slice::<NodeConfig>(&fs::read(config_filepath).await?)
+					.map_err(Into::into)
 			}
 			Err(e) if e.kind() == io::ErrorKind::NotFound => {
 				let config = NodeConfig::default();
@@ -158,10 +156,10 @@ impl NodeConfigManager {
 	async fn migrate_config(
 		current_config_metadata: &ConfigMetadata,
 		config_filepath: impl AsRef<Path>,
-	) -> Result<bool, NodeConfigError> {
+	) -> Result<(), NodeConfigError> {
 		// If the received version is the default one, so we don't need to migrate the config file
 		if current_config_metadata == &ConfigMetadata::default() {
-			return Ok(false);
+			return Ok(());
 		}
 
 		match current_config_metadata.version {
@@ -173,7 +171,7 @@ impl NodeConfigManager {
 				config_filepath.as_ref().display()
 			))),
 			// TODO: When we need a config migration, fill in for a new match arm with Some("version")
-			_ => Ok(true),
+			_ => Ok(()),
 		}
 	}
 }
