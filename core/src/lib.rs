@@ -23,7 +23,7 @@ pub(crate) mod prisma_sync;
 
 use api::{CoreEvent, Ctx, Router};
 use job::JobManager;
-use library::LibraryManager;
+use library::{LibraryContext, LibraryManager};
 use location::{LocationManager, LocationManagerError};
 use node::{NodeConfigManager, NodeReboot};
 
@@ -37,7 +37,7 @@ pub struct NodeContext {
 
 pub struct Node {
 	config: Arc<NodeConfigManager>,
-	library_manager: Arc<RwLock<Arc<LibraryManager>>>,
+	library_manager: Arc<RwLock<LibraryManager>>,
 	jobs: Arc<RwLock<Arc<JobManager>>>,
 	event_bus: (broadcast::Sender<CoreEvent>, broadcast::Receiver<CoreEvent>),
 	reboot_tx: mpsc::Sender<NodeReboot>,
@@ -133,7 +133,10 @@ impl Node {
 
 		Self::setup_location_management(&library_manager, &location_manager).await;
 
-		Self::resume_paused_jobs(Arc::clone(&library_manager), Arc::clone(&job_manager));
+		Self::resume_paused_jobs(
+			library_manager.get_all_libraries_ctx().await,
+			Arc::clone(&job_manager),
+		);
 
 		let jobs = Arc::new(RwLock::new(job_manager));
 		let library_manager = Arc::new(RwLock::new(library_manager));
@@ -240,9 +243,9 @@ impl Node {
 		}
 	}
 
-	fn resume_paused_jobs(library_manager: Arc<LibraryManager>, job_manager: Arc<JobManager>) {
+	fn resume_paused_jobs(libraries_ctxs: Vec<LibraryContext>, job_manager: Arc<JobManager>) {
 		tokio::spawn(async move {
-			for library_ctx in library_manager.get_all_libraries_ctx().await {
+			for library_ctx in libraries_ctxs {
 				if let Err(e) = Arc::clone(&job_manager).resume_jobs(&library_ctx).await {
 					error!("Failed to resume jobs for library. {:#?}", e);
 				}
@@ -252,13 +255,13 @@ impl Node {
 
 	async fn handle_reboot(
 		mut reboot_rx: mpsc::Receiver<NodeReboot>,
-		library_manager: Arc<RwLock<Arc<LibraryManager>>>,
+		library_manager: Arc<RwLock<LibraryManager>>,
 		jobs: Arc<RwLock<Arc<JobManager>>>,
 		config: Arc<NodeConfigManager>,
 		event_bus_tx: broadcast::Sender<CoreEvent>,
 	) {
 		let inner = |force_reboot: bool,
-		             library_manager: Arc<RwLock<Arc<LibraryManager>>>,
+		             library_manager: Arc<RwLock<LibraryManager>>,
 		             jobs: Arc<RwLock<Arc<JobManager>>>,
 		             config: Arc<NodeConfigManager>,
 		             event_bus_tx: broadcast::Sender<CoreEvent>| {

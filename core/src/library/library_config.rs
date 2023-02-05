@@ -42,10 +42,10 @@ impl LibraryConfig {
 
 	/// save will write the configuration back to disk
 	pub(super) async fn save(
-		file_dir: impl AsRef<Path>,
+		config_path: impl AsRef<Path>,
 		config: &LibraryConfig,
 	) -> Result<(), LibraryManagerError> {
-		fs::write(file_dir, serde_json::to_vec(config)?)
+		fs::write(config_path, serde_json::to_vec(config)?)
 			.await
 			.map_err(Into::into)
 	}

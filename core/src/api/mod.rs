@@ -41,7 +41,7 @@ pub enum CoreEvent {
 
 /// Is provided when executing the router from the request.
 pub struct Ctx {
-	pub library_manager: Arc<RwLock<Arc<LibraryManager>>>,
+	pub library_manager: Arc<RwLock<LibraryManager>>,
 	pub config: Arc<NodeConfigManager>,
 	pub jobs: Arc<RwLock<Arc<JobManager>>>,
 	pub event_bus: broadcast::Sender<CoreEvent>,
@@ -68,7 +68,7 @@ impl Ctx {
 		self.jobs.read().await
 	}
 
-	async fn library_manager(&self) -> RwLockReadGuard<Arc<LibraryManager>> {
+	async fn library_manager(&self) -> RwLockReadGuard<LibraryManager> {
 		self.library_manager.read().await
 	}
 }

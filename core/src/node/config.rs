@@ -88,9 +88,10 @@ impl NodeConfigManager {
 	/// new will create a new NodeConfigManager with the given path to the config file.
 	pub(crate) async fn new(data_directory: impl AsRef<Path>) -> Result<Self, NodeConfigError> {
 		let data_directory = data_directory.as_ref().to_path_buf();
+		let config_filepath = data_directory.join(NODE_STATE_CONFIG_NAME);
 		Ok(Self {
-			config: RwLock::new(Self::read(&data_directory).await?),
-			config_filepath: data_directory.join(NODE_STATE_CONFIG_NAME),
+			config: RwLock::new(Self::read(&config_filepath).await?),
+			config_filepath,
 			data_directory,
 		})
 	}
@@ -138,7 +139,7 @@ impl NodeConfigManager {
 				Self::save_to_file(config_filepath, &config).await?;
 				Ok(config)
 			}
-			Err(e) => return Err(e.into()),
+			Err(e) => Err(e.into()),
 		}
 	}
 
