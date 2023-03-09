@@ -32,7 +32,7 @@ pub struct LibraryManager {
 	/// libraries_dir holds the path to the directory where libraries are stored.
 	libraries_dir: PathBuf,
 	/// libraries holds the list of libraries which are currently loaded into the node.
-	libraries: RwLock<Vec<Library>>,
+	pub libraries: RwLock<Vec<Library>>,
 	/// node_context holds the context for the node which this library manager is running on.
 	pub node_context: NodeContext,
 }
@@ -337,7 +337,17 @@ impl LibraryManager {
 		let key_manager = Arc::new(KeyManager::new(vec![]).await?);
 		seed_keymanager(&db, &key_manager).await?;
 
-		let (sync_manager, _) = SyncManager::new(&db, id);
+		let (sync_manager, mut sync_rx) = SyncManager::new(&db, id);
+
+		tokio::spawn({
+			let node_context = node_context.clone();
+
+			async move {
+				while let Some(op) = sync_rx.recv().await {
+					node_context.p2p.broadcast_sync_events(id, vec![op]).await;
+				}
+			}
+		});
 
 		Ok(Library {
 			id,

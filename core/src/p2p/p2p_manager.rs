@@ -5,6 +5,7 @@ use sd_sync::CRDTOperation;
 use tokio::{
 	fs::File,
 	io::{AsyncReadExt, AsyncWriteExt, BufReader},
+	sync::mpsc::{channel, Receiver},
 };
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -20,8 +21,12 @@ pub struct P2PManager {
 	manager: Arc<Manager<PeerMetadata>>,
 }
 
+pub enum P2PMessage {
+	Sync(Uuid, Vec<CRDTOperation>),
+}
+
 impl P2PManager {
-	pub async fn new(node_config: Arc<NodeConfigManager>) -> Arc<Self> {
+	pub async fn new(node_config: Arc<NodeConfigManager>) -> (Arc<Self>, Receiver<P2PMessage>) {
 		let (config, keypair) = {
 			let config = node_config.get().await;
 			(
@@ -51,6 +56,8 @@ impl P2PManager {
 			manager.listen_addrs().await
 		);
 
+		let (tx, rx) = channel(128);
+
 		tokio::spawn(async move {
 			while let Some(event) = stream.next().await {
 				match event {
@@ -62,48 +69,52 @@ impl P2PManager {
 						event.dial().await; // We connect to everyone we find on the network. Your app will probs wanna restrict this!
 					}
 					Event::PeerMessage(mut event) => {
-						tokio::spawn(async move {
-							let header = Header::from_stream(&mut event.stream).await.unwrap();
+						tokio::spawn({
+							let tx = tx.clone();
 
-							match header {
-								Header::Ping => {
-									debug!("Received ping from peer '{}'", event.peer_id);
-								}
-								Header::Spacedrop => {
-									let file_length = event.stream.read_u8().await.unwrap();
+							async move {
+								let header = Header::from_stream(&mut event.stream)
+									.await
+									.expect("Failed to decode header");
 
-									// TODO: Ask the user if they wanna reject/accept it
+								match header {
+									Header::Ping => {
+										debug!("Received ping from peer '{}'", event.peer_id);
+									}
+									Header::Spacedrop => {
+										let file_length = event.stream.read_u8().await.unwrap();
 
-									info!("Received Spacedrop from peer '{}' with file length '{file_length}'", event.peer_id);
+										// TODO: Ask the user if they wanna reject/accept it
 
-									let mut s = String::new();
-									event.stream.read_to_string(&mut s).await.unwrap();
+										info!("Received Spacedrop from peer '{}' with file length '{file_length}'", event.peer_id);
 
-									// let mut buf = Vec::with_capacity(file_length as usize); // TODO: DOS attack
-									// loop {
-									// 	let n = event.stream.read(&mut buf).await.unwrap();;
-									// }
+										let mut s = String::new();
+										event.stream.read_to_string(&mut s).await.unwrap();
 
-									// // TODO: Store this to a file on disk.
-									println!(
-										"Recieved file content '{}' through Spacedrop!",
-										s // String::from_utf8(buf).unwrap()
-									);
-								}
-								Header::Sync(library_id) => {
-									let buf_len = event.stream.read_u8().await.unwrap();
+										// let mut buf = Vec::with_capacity(file_length as usize); // TODO: DOS attack
+										// loop {
+										// 	let n = event.stream.read(&mut buf).await.unwrap();;
+										// }
 
-									let mut buf = vec![0; buf_len as usize]; // TODO: Designed for easily being able to be DOS the current Node
-									event.stream.read_exact(&mut buf).await.unwrap();
+										// // TODO: Store this to a file on disk.
+										println!("Recieved file content '{s}' through Spacedrop!",);
+										// String::from_utf8(buf).unwrap()
+									}
+									Header::Sync(library_id) => {
+										let buf_len = event.stream.read_u8().await.unwrap();
 
-									let mut buf: &[u8] = &buf;
-									let output: Vec<CRDTOperation> =
-										rmp_serde::from_read(&mut buf).unwrap();
+										let mut buf = vec![0; buf_len as usize]; // TODO: Designed for easily being able to be DOS the current Node
+										event.stream.read_exact(&mut buf).await.unwrap();
 
-									// TODO: Handle this @Brendan
-									println!("Received sync events for library '{library_id}': {output:?}");
+										let mut buf: &[u8] = &buf;
+										let output = rmp_serde::from_read(&mut buf).unwrap();
 
-									// TODO(@Oscar): Remember we can't do a response here cause it's a broadcast. Encode that into type system!
+										println!("Received sync events for library '{library_id}': {output:?}");
+
+										tx.send(P2PMessage::Sync(library_id, output)).await.ok();
+
+										// TODO(@Oscar): Remember we can't do a response here cause it's a broadcast. Encode that into type system!
+									}
 								}
 							}
 						});
@@ -153,7 +164,7 @@ impl P2PManager {
 			}
 		});
 
-		this
+		(this, rx)
 	}
 
 	#[allow(unused)] // TODO: Remove `allow(unused)` once integrated
@@ -192,7 +203,7 @@ impl P2PManager {
 
 		let mut buffer = Vec::new();
 		reader.read_to_end(&mut buffer).await.unwrap();
-		println!("READ {:?}", buffer);
+		println!("READ {buffer:?}");
 
 		stream.write_all(&buffer).await.unwrap();
 

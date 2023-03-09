@@ -4,7 +4,7 @@ use crate::{
 	library::LibraryManager,
 	location::{LocationManager, LocationManagerError},
 	node::NodeConfigManager,
-	p2p::P2PManager,
+	p2p::{P2PManager, P2PMessage},
 };
 use util::secure_temp_keystore::SecureTempKeystore;
 
@@ -35,6 +35,7 @@ pub struct NodeContext {
 	pub jobs: Arc<JobManager>,
 	pub location_manager: Arc<LocationManager>,
 	pub event_bus_tx: broadcast::Sender<CoreEvent>,
+	pub p2p: Arc<P2PManager>,
 }
 
 pub struct Node {
@@ -129,12 +130,15 @@ impl Node {
 		let jobs = JobManager::new();
 		let location_manager = LocationManager::new();
 		let secure_temp_keystore = SecureTempKeystore::new();
+		let (p2p, mut p2p_rx) = P2PManager::new(config.clone()).await;
+
 		let library_manager = LibraryManager::new(
 			data_dir.join("libraries"),
 			NodeContext {
-				config: Arc::clone(&config),
-				jobs: Arc::clone(&jobs),
-				location_manager: Arc::clone(&location_manager),
+				config: config.clone(),
+				jobs: jobs.clone(),
+				p2p: p2p.clone(),
+				location_manager: location_manager.clone(),
 				event_bus_tx: event_bus.0.clone(),
 			},
 		)
@@ -164,17 +168,35 @@ impl Node {
 		debug!("Watching locations");
 
 		// Trying to resume possible paused jobs
-		let inner_library_manager = Arc::clone(&library_manager);
-		let inner_jobs = Arc::clone(&jobs);
-		tokio::spawn(async move {
-			for library in inner_library_manager.get_all_libraries().await {
-				if let Err(e) = Arc::clone(&inner_jobs).resume_jobs(&library).await {
-					error!("Failed to resume jobs for library. {:#?}", e);
+		tokio::spawn({
+			let library_manager = library_manager.clone();
+			let jobs = jobs.clone();
+
+			async move {
+				for library in library_manager.get_all_libraries().await {
+					if let Err(e) = jobs.clone().resume_jobs(&library).await {
+						error!("Failed to resume jobs for library. {:#?}", e);
+					}
 				}
 			}
 		});
 
-		let p2p = P2PManager::new(config.clone()).await;
+		tokio::spawn({
+			let library_manager = library_manager.clone();
+			async move {
+				while let Some(msg) = p2p_rx.recv().await {
+					match msg {
+						P2PMessage::Sync(_, ops) => {
+							if let Some(lib) = library_manager.libraries.read().await.first() {
+								for op in ops {
+									lib.sync.ingest_op(op).await.ok();
+								}
+							}
+						}
+					}
+				}
+			}
+		});
 
 		let router = api::mount();
 		let node = Node {
