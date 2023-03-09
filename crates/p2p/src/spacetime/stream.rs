@@ -9,7 +9,7 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt};
 
 #[derive(Debug)]
-pub struct SpaceTimeStream(Compat<NegotiatedSubstream>);
+pub struct SpaceTimeStream(Compat<NegotiatedSubstream>); // TODO: Do I need to use a buffered reader on the stream or is that done for me?
 
 // TODO: Utils for sending msgpack and stuff over the stream. -> Have a max size of reading buffers so we are less susceptible to DoS attacks.
 

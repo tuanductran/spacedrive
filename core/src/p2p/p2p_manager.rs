@@ -174,7 +174,7 @@ impl P2PManager {
 		head_buf.push(buf.len() as u8); // TODO: This is going to overflow quickly so deal with it properly!
 		head_buf.append(&mut buf);
 
-		self.manager.broadcast(buf).await;
+		self.manager.broadcast(head_buf).await;
 	}
 
 	pub async fn ping(&self) {
