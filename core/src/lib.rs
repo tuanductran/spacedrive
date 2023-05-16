@@ -4,9 +4,8 @@ use crate::{
 	library::LibraryManager,
 	location::{LocationManager, LocationManagerError},
 	node::NodeConfigManager,
-	p2p::{P2PEvent, P2PManager},
+	p2p::P2PManager,
 };
-use util::secure_temp_keystore::SecureTempKeystore;
 
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
@@ -17,8 +16,9 @@ use tracing_subscriber::{prelude::*, EnvFilter};
 pub mod api;
 pub mod custom_uri;
 pub(crate) mod job;
-pub(crate) mod library;
+pub mod library;
 pub(crate) mod location;
+pub(crate) mod migrations;
 pub(crate) mod node;
 pub(crate) mod object;
 pub(crate) mod p2p;
@@ -26,7 +26,8 @@ pub(crate) mod sync;
 pub(crate) mod util;
 pub(crate) mod volume;
 
-pub(crate) mod prisma;
+#[allow(warnings, unused)]
+mod prisma;
 pub(crate) mod prisma_sync;
 
 #[derive(Clone)]
@@ -40,11 +41,11 @@ pub struct NodeContext {
 
 pub struct Node {
 	config: Arc<NodeConfigManager>,
-	library_manager: Arc<LibraryManager>,
+	pub library_manager: Arc<LibraryManager>,
+	location_manager: Arc<LocationManager>,
 	jobs: Arc<JobManager>,
 	p2p: Arc<P2PManager>,
 	event_bus: (broadcast::Sender<CoreEvent>, broadcast::Receiver<CoreEvent>),
-	secure_temp_keystore: Arc<SecureTempKeystore>,
 	// peer_request: tokio::sync::Mutex<Option<PeerRequest>>,
 }
 
@@ -61,6 +62,9 @@ const CONSOLE_LOG_FILTER: tracing_subscriber::filter::LevelFilter = {
 impl Node {
 	pub async fn new(data_dir: impl AsRef<Path>) -> Result<(Arc<Node>, Arc<Router>), NodeError> {
 		let data_dir = data_dir.as_ref();
+
+		#[cfg(debug_assertions)]
+		let init_data = util::debug_initializer::InitConfig::load(data_dir).await;
 
 		// This error is ignored because it's throwing on mobile despite the folder existing.
 		let _ = fs::create_dir_all(&data_dir).await;
@@ -105,11 +109,12 @@ impl Node {
 					"desktop=debug"
 						.parse()
 						.expect("Error invalid tracing directive!"),
-				), // .add_directive(
-			    // 	"rspc=debug"
-			    // 		.parse()
-			    // 		.expect("Error invalid tracing directive!"),
-			    // ),
+				),
+			// .add_directive(
+			// 	"rspc=debug"
+			// 		.parse()
+			// 		.expect("Error invalid tracing directive!"),
+			// ),
 		);
 		#[cfg(not(target_os = "android"))]
 		let subscriber = subscriber.with(tracing_subscriber::fmt::layer().with_filter(CONSOLE_LOG_FILTER));
@@ -129,7 +134,6 @@ impl Node {
 
 		let jobs = JobManager::new();
 		let location_manager = LocationManager::new();
-		let secure_temp_keystore = SecureTempKeystore::new();
 		let (p2p, mut p2p_rx) = P2PManager::new(config.clone()).await;
 
 		let library_manager = LibraryManager::new(
@@ -144,68 +148,28 @@ impl Node {
 		)
 		.await?;
 
-		// Adding already existing locations for location management
-		for library in library_manager.get_all_libraries().await {
-			for location in library
-				.db
-				.location()
-				.find_many(vec![])
-				.exec()
-				.await
-				.unwrap_or_else(|e| {
-					error!(
-						"Failed to get locations from database for location manager: {:#?}",
-						e
-					);
-					vec![]
-				}) {
-				if let Err(e) = location_manager.add(location.id, library.clone()).await {
-					error!("Failed to add location to location manager: {:#?}", e);
-				}
-			}
+		#[cfg(debug_assertions)]
+		if let Some(init_data) = init_data {
+			init_data.apply(&library_manager).await;
 		}
 
 		debug!("Watching locations");
 
-		// Trying to resume possible paused jobs
-		tokio::spawn({
-			let library_manager = library_manager.clone();
-			let jobs = jobs.clone();
-
-			async move {
-				for library in library_manager.get_all_libraries().await {
-					if let Err(e) = jobs.clone().resume_jobs(&library).await {
-						error!("Failed to resume jobs for library. {:#?}", e);
-					}
-				}
-			}
-		});
-
 		tokio::spawn({
 			let library_manager = library_manager.clone();
 
 			async move {
-				while let Ok(ops) = p2p_rx.recv().await {
-					match ops {
-						P2PEvent::SyncOperation {
-							library_id,
-							operations,
-						} => {
-							debug!("going to ingest {} operations", operations.len());
+				while let Ok((library_id, operations)) = p2p_rx.recv().await {
+					debug!("going to ingest {} operations", operations.len());
 
-							let libraries = library_manager.libraries.read().await;
+					let Some(library) = library_manager.get_library(library_id).await else {
+						warn!("no library found!");
+						continue;
+					};
 
-							let Some(library) = libraries.first() else {
-                                warn!("no library found!");
-                                continue;
-                            };
-
-							for op in operations {
-								println!("ingest lib id: {}", library.id);
-								library.sync.ingest_op(op).await.unwrap();
-							}
-						}
-						_ => {}
+					for op in operations {
+						println!("ingest lib id: {}", library.id);
+						library.sync.ingest_op(op).await.unwrap();
 					}
 				}
 			}
@@ -215,10 +179,10 @@ impl Node {
 		let node = Node {
 			config,
 			library_manager,
+			location_manager,
 			jobs,
 			p2p,
 			event_bus,
-			secure_temp_keystore,
 			// peer_request: tokio::sync::Mutex::new(None),
 		};
 
@@ -229,6 +193,7 @@ impl Node {
 	pub async fn shutdown(&self) {
 		info!("Spacedrive shutting down...");
 		self.jobs.pause().await;
+		self.p2p.shutdown().await;
 		info!("Spacedrive Core shutdown successful!");
 	}
 
@@ -254,9 +219,11 @@ pub enum NodeError {
 	#[error("Failed to create data directory: {0}")]
 	FailedToCreateDataDirectory(#[from] std::io::Error),
 	#[error("Failed to initialize config: {0}")]
-	FailedToInitializeConfig(#[from] node::NodeConfigError),
+	FailedToInitializeConfig(#[from] util::migrator::MigratorError),
 	#[error("Failed to initialize library manager: {0}")]
 	FailedToInitializeLibraryManager(#[from] library::LibraryManagerError),
 	#[error("Location manager error: {0}")]
 	LocationManager(#[from] LocationManagerError),
+	#[error("invalid platform integer")]
+	InvalidPlatformInt(i32),
 }

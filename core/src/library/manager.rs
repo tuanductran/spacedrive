@@ -1,11 +1,10 @@
 use crate::{
 	invalidate_query,
-	location::file_path_helper::LastFilePathIdManager,
 	node::Platform,
 	prisma::{node, PrismaClient},
 	sync::{SyncManager, SyncMessage},
 	util::{
-		db::{load_and_migrate, write_storedkey_to_db},
+		db::load_and_migrate,
 		seeder::{indexer_rules_seeder, SeederError},
 	},
 	NodeContext,
@@ -13,7 +12,7 @@ use crate::{
 
 use sd_crypto::{
 	keys::keymanager::{KeyManager, StoredKey},
-	types::{EncryptedKey, Nonce, OnboardingConfig, Salt},
+	types::{EncryptedKey, Nonce, Salt},
 };
 use std::{
 	env, fs, io,
@@ -23,7 +22,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tracing::debug;
+use tracing::{debug, error};
 use uuid::Uuid;
 
 use super::{Library, LibraryConfig, LibraryConfigWrapped};
@@ -33,9 +32,9 @@ pub struct LibraryManager {
 	/// libraries_dir holds the path to the directory where libraries are stored.
 	libraries_dir: PathBuf,
 	/// libraries holds the list of libraries which are currently loaded into the node.
-	pub libraries: RwLock<Vec<Library>>,
+	libraries: RwLock<Vec<Library>>,
 	/// node_context holds the context for the node which this library manager is running on.
-	pub node_context: NodeContext,
+	node_context: NodeContext,
 }
 
 #[derive(Error, Debug)]
@@ -58,6 +57,10 @@ pub enum LibraryManagerError {
 	Seeder(#[from] SeederError),
 	#[error("failed to initialise the key manager")]
 	KeyManager(#[from] sd_crypto::Error),
+	#[error("failed to run library migrations: {0}")]
+	MigratorError(#[from] crate::util::migrator::MigratorError),
+	#[error("invalid library configuration: {0}")]
+	InvalidConfig(String),
 }
 
 impl From<LibraryManagerError> for rspc::Error {
@@ -162,7 +165,7 @@ impl LibraryManager {
 				continue;
 			}
 
-			let config = LibraryConfig::read(config_path).await?;
+			let config = LibraryConfig::read(config_path)?;
 			libraries.push(Self::load(library_id, &db_path, config, node_context.clone()).await?);
 		}
 
@@ -181,14 +184,25 @@ impl LibraryManager {
 	pub(crate) async fn create(
 		&self,
 		config: LibraryConfig,
-		km_config: OnboardingConfig,
 	) -> Result<LibraryConfigWrapped, LibraryManagerError> {
-		let id = Uuid::new_v4();
+		self.create_with_uuid(Uuid::new_v4(), config).await
+	}
+
+	pub(crate) async fn create_with_uuid(
+		&self,
+		id: Uuid,
+		config: LibraryConfig,
+	) -> Result<LibraryConfigWrapped, LibraryManagerError> {
+		if config.name.is_empty() || config.name.chars().all(|x| x.is_whitespace()) {
+			return Err(LibraryManagerError::InvalidConfig(
+				"name cannot be empty".to_string(),
+			));
+		}
+
 		LibraryConfig::save(
 			Path::new(&self.libraries_dir).join(format!("{id}.sdlibrary")),
 			&config,
-		)
-		.await?;
+		)?;
 
 		let library = Self::load(
 			id,
@@ -200,14 +214,6 @@ impl LibraryManager {
 
 		// Run seeders
 		indexer_rules_seeder(&library.db).await?;
-
-		// setup master password
-		let verification_key = KeyManager::onboarding(km_config, library.id).await?;
-
-		write_storedkey_to_db(&library.db, &verification_key).await?;
-
-		// populate KM with the verification key
-		seed_keymanager(&library.db, &library.key_manager).await?;
 
 		invalidate_query!(library, "library.list");
 
@@ -227,9 +233,9 @@ impl LibraryManager {
 			.collect()
 	}
 
-	pub(crate) async fn get_all_libraries(&self) -> Vec<Library> {
-		self.libraries.read().await.clone()
-	}
+	// pub(crate) async fn get_all_libraries(&self) -> Vec<Library> {
+	// 	self.libraries.read().await.clone()
+	// }
 
 	pub(crate) async fn edit(
 		&self,
@@ -255,15 +261,39 @@ impl LibraryManager {
 		LibraryConfig::save(
 			Path::new(&self.libraries_dir).join(format!("{id}.sdlibrary")),
 			&library.config,
-		)
-		.await?;
+		)?;
 
 		invalidate_query!(library, "library.list");
+
+		for library in self.libraries.read().await.iter() {
+			for location in library
+				.db
+				.location()
+				.find_many(vec![])
+				.exec()
+				.await
+				.unwrap_or_else(|e| {
+					error!(
+						"Failed to get locations from database for location manager: {:#?}",
+						e
+					);
+					vec![]
+				}) {
+				if let Err(e) = self
+					.node_context
+					.location_manager
+					.add(location.id, library.clone())
+					.await
+				{
+					error!("Failed to add location to location manager: {:#?}", e);
+				}
+			}
+		}
 
 		Ok(())
 	}
 
-	pub async fn delete_library(&self, id: Uuid) -> Result<(), LibraryManagerError> {
+	pub async fn delete(&self, id: Uuid) -> Result<(), LibraryManagerError> {
 		let mut libraries = self.libraries.write().await;
 
 		let library = libraries
@@ -282,7 +312,7 @@ impl LibraryManager {
 	}
 
 	// get_ctx will return the library context for the given library id.
-	pub(crate) async fn get_ctx(&self, library_id: Uuid) -> Option<Library> {
+	pub async fn get_library(&self, library_id: Uuid) -> Option<Library> {
 		self.libraries
 			.read()
 			.await
@@ -324,7 +354,7 @@ impl LibraryManager {
 			.node()
 			.upsert(
 				node::pub_id::equals(uuid_vec.clone()),
-				(
+				node::create(
 					uuid_vec,
 					node_config.name.clone(),
 					vec![node::platform::set(platform as i32)],
@@ -351,16 +381,27 @@ impl LibraryManager {
 			}
 		});
 
-		Ok(Library {
+		let library = Library {
 			id,
 			local_id: node_data.id,
 			config,
 			key_manager,
 			sync: Arc::new(sync_manager),
 			db,
-			last_file_path_id_manager: Arc::new(LastFilePathIdManager::new()),
 			node_local_id: node_data.id,
 			node_context,
-		})
+		};
+
+		if let Err(e) = library
+			.node_context
+			.jobs
+			.clone()
+			.resume_jobs(&library)
+			.await
+		{
+			error!("Failed to resume jobs for library. {:#?}", e);
+		}
+
+		Ok(library)
 	}
 }

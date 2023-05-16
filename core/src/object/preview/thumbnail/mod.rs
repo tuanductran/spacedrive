@@ -2,8 +2,11 @@ use crate::{
 	api::CoreEvent,
 	invalidate_query,
 	job::{JobError, JobReportUpdate, JobResult, WorkerContext},
+	library::Library,
 	location::{
-		file_path_helper::{file_path_just_materialized_path_cas_id, FilePathError},
+		file_path_helper::{
+			file_path_just_materialized_path_cas_id, FilePathError, MaterializedPath,
+		},
 		LocationId,
 	},
 };
@@ -30,9 +33,19 @@ use webp::Encoder;
 pub mod shallow_thumbnailer_job;
 pub mod thumbnailer_job;
 
-static THUMBNAIL_SIZE_FACTOR: f32 = 0.2;
-static THUMBNAIL_QUALITY: f32 = 30.0;
-pub static THUMBNAIL_CACHE_DIR_NAME: &str = "thumbnails";
+const THUMBNAIL_SIZE_FACTOR: f32 = 0.2;
+const THUMBNAIL_QUALITY: f32 = 30.0;
+pub const THUMBNAIL_CACHE_DIR_NAME: &str = "thumbnails";
+
+/// This does not check if a thumbnail exists, it just returns the path that it would exist at
+pub fn get_thumbnail_path(library: &Library, cas_id: &str) -> PathBuf {
+	library
+		.config()
+		.data_directory()
+		.join(THUMBNAIL_CACHE_DIR_NAME)
+		.join(cas_id)
+		.with_extension("webp")
+}
 
 #[cfg(feature = "ffmpeg")]
 static FILTERED_VIDEO_EXTENSIONS: Lazy<Vec<Extension>> = Lazy::new(|| {
@@ -148,7 +161,10 @@ fn finalize_thumbnailer(data: &ThumbnailerJobState, ctx: WorkerContext) -> JobRe
 		"Finished thumbnail generation for location {} at {}",
 		data.report.location_id,
 		data.location_path
-			.join(&data.report.materialized_path)
+			.join(&MaterializedPath::from((
+				data.report.location_id,
+				&data.report.materialized_path
+			)))
 			.display()
 	);
 
@@ -185,7 +201,10 @@ async fn inner_process_step(
 	ctx: &WorkerContext,
 ) -> Result<(), JobError> {
 	// assemble the file path
-	let path = data.location_path.join(&step.file_path.materialized_path);
+	let path = data.location_path.join(&MaterializedPath::from((
+		data.report.location_id,
+		&step.file_path.materialized_path,
+	)));
 	trace!("image_file {:?}", step);
 
 	// get cas_id, if none found skip
@@ -222,13 +241,10 @@ async fn inner_process_step(
 				}
 			}
 
-			if !is_background {
-				ctx.library.emit(CoreEvent::NewThumbnail {
-					cas_id: cas_id.clone(),
-				});
-				// With this invalidate query, we update the user interface to show each new thumbnail
-				invalidate_query!(ctx.library, "locations.getExplorerData");
-			};
+			println!("emitting new thumbnail event");
+			ctx.library.emit(CoreEvent::NewThumbnail {
+				cas_id: cas_id.clone(),
+			});
 
 			data.report.thumbnails_created += 1;
 		}

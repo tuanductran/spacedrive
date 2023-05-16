@@ -3,43 +3,49 @@ import { useLibraryContext, useLibraryMutation, useLibraryQuery } from '@sd/clie
 import { Button, ButtonLink, Tabs } from '@sd/ui';
 import KeyList from './List';
 import KeyMounter from './Mounter';
+import NotSetup from './NotSetup';
 import NotUnlocked from './NotUnlocked';
 
 export function KeyManager() {
 	const isUnlocked = useLibraryQuery(['keys.isUnlocked']);
+	const isSetup = useLibraryQuery(['keys.isSetup']);
 
+	if (!isSetup?.data) return <NotSetup />;
 	if (!isUnlocked?.data) return <NotUnlocked />;
 	else return <Unlocked />;
 }
 
 const Unlocked = () => {
 	const { library } = useLibraryContext();
+	const isUnlocked = useLibraryQuery(['keys.isUnlocked']);
 
 	const unmountAll = useLibraryMutation('keys.unmountAll');
 	const clearMasterPassword = useLibraryMutation('keys.clearMasterPassword');
 
 	return (
-		<div>
+		<div className="w-[350px]">
 			<Tabs.Root defaultValue="mount">
-				<div className="flex flex-col">
+				<div className="min-w-32 flex flex-col">
 					<Tabs.List>
-						<Tabs.Trigger className="text-sm font-medium" value="mount">
+						<Tabs.Trigger className="!rounded-md text-sm font-medium" value="mount">
 							Mount
 						</Tabs.Trigger>
-						<Tabs.Trigger className="text-sm font-medium" value="keys">
+						<Tabs.Trigger className="!rounded-md text-sm font-medium" value="keys">
 							Keys
 						</Tabs.Trigger>
 						<div className="grow" />
 						<Button
 							size="icon"
 							onClick={() => {
-								unmountAll.mutate(null);
-								clearMasterPassword.mutate(null);
+								unmountAll
+									.mutateAsync(null)
+									.then(() => clearMasterPassword.mutateAsync(null))
+									.then(() => isUnlocked.refetch());
 							}}
 							variant="subtle"
 							className="text-ink-faint"
 						>
-							<Lock className="text-ink-faint h-4 w-4" />
+							<Lock className="h-4 w-4 text-ink-faint" />
 						</Button>
 						<ButtonLink
 							to={`/${library.uuid}/settings/library/keys`}
@@ -47,7 +53,7 @@ const Unlocked = () => {
 							variant="subtle"
 							className="text-ink-faint"
 						>
-							<Gear className="text-ink-faint h-4 w-4" />
+							<Gear className="h-4 w-4 text-ink-faint" />
 						</ButtonLink>
 					</Tabs.List>
 				</div>
@@ -75,7 +81,7 @@ const Keys = () => {
 					</div>
 				</div>
 			</div>
-			<div className="border-app-line flex w-full rounded-b-md border-t p-2">
+			<div className="flex w-full rounded-b-md border-t border-app-line p-2">
 				<Button
 					size="sm"
 					variant="gray"

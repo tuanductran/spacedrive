@@ -1,4 +1,4 @@
-use crate::{job::*, library::Library};
+use crate::{invalidate_query, job::*, library::Library};
 
 use std::path::PathBuf;
 
@@ -12,7 +12,8 @@ use sd_crypto::{
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tokio::{fs::File, io::AsyncReadExt};
-use tracing::warn;
+use tracing::{error, warn};
+use uuid::Uuid;
 
 use super::{context_menu_fs_info, FsInfo, BYTES_EXT};
 
@@ -25,7 +26,7 @@ pub struct FileEncryptorJobState {}
 pub struct FileEncryptorJobInit {
 	pub location_id: i32,
 	pub path_id: i32,
-	pub key_uuid: uuid::Uuid,
+	pub key_uuid: Uuid,
 	pub algorithm: Algorithm,
 	pub metadata: bool,
 	pub preview_media: bool,
@@ -41,10 +42,11 @@ pub struct Metadata {
 	pub important: bool,
 	pub note: Option<String>,
 	pub date_created: chrono::DateTime<FixedOffset>,
-	pub date_modified: chrono::DateTime<FixedOffset>,
 }
 
-const JOB_NAME: &str = "file_encryptor";
+impl JobInitData for FileEncryptorJobInit {
+	type Job = FileEncryptorJob;
+}
 
 #[async_trait::async_trait]
 impl StatefulJob for FileEncryptorJob {
@@ -52,8 +54,10 @@ impl StatefulJob for FileEncryptorJob {
 	type Data = FileEncryptorJobState;
 	type Step = FsInfo;
 
-	fn name(&self) -> &'static str {
-		JOB_NAME
+	const NAME: &'static str = "file_encryptor";
+
+	fn new() -> Self {
+		Self {}
 	}
 
 	async fn init(&self, ctx: WorkerContext, state: &mut JobState<Self>) -> Result<(), JobError> {
@@ -123,7 +127,17 @@ impl StatefulJob for FileEncryptorJob {
 					ctx.library.clone(),
 					&output_path,
 				)
-				.await?;
+				.await
+				.map_or_else(
+					|e| {
+						error!(
+							"Failed to make location manager ignore the path {}; Error: {e:#?}",
+							output_path.display()
+						);
+						None
+					},
+					Some,
+				);
 
 			let mut reader = File::open(&info.fs_path).await?;
 			let mut writer = File::create(output_path).await?;
@@ -148,7 +162,7 @@ impl StatefulJob for FileEncryptorJob {
 
 			if state.init.metadata || state.init.preview_media {
 				// if any are requested, we can make the query as it'll be used at least once
-				if let Some(object) = info.path_data.object.clone() {
+				if let Some(ref object) = info.path_data.object {
 					if state.init.metadata {
 						let metadata = Metadata {
 							path_id: state.init.path_id,
@@ -156,9 +170,8 @@ impl StatefulJob for FileEncryptorJob {
 							hidden: object.hidden,
 							favorite: object.favorite,
 							important: object.important,
-							note: object.note,
+							note: object.note.clone(),
 							date_created: object.date_created,
-							date_modified: object.date_modified,
 						};
 
 						header
@@ -225,7 +238,9 @@ impl StatefulJob for FileEncryptorJob {
 		Ok(())
 	}
 
-	async fn finalize(&mut self, _ctx: WorkerContext, state: &mut JobState<Self>) -> JobResult {
+	async fn finalize(&mut self, ctx: WorkerContext, state: &mut JobState<Self>) -> JobResult {
+		invalidate_query!(ctx.library, "locations.getExplorerData");
+
 		// mark job as successful
 		Ok(Some(serde_json::to_value(&state.init)?))
 	}

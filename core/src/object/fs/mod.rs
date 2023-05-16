@@ -1,6 +1,6 @@
 use crate::{
 	job::JobError,
-	location::file_path_helper::file_path_with_object,
+	location::file_path_helper::{file_path_with_object, MaterializedPath},
 	prisma::{file_path, location, PrismaClient},
 };
 
@@ -61,11 +61,11 @@ pub async fn get_path_from_location_id(
 pub async fn context_menu_fs_info(
 	db: &PrismaClient,
 	location_id: i32,
-	path_id: i32,
+	file_path_id: i32,
 ) -> Result<FsInfo, JobError> {
 	let path_data = db
 		.file_path()
-		.find_unique(file_path::location_id_id(location_id, path_id))
+		.find_unique(file_path::id::equals(file_path_id))
 		.include(file_path_with_object::include())
 		.exec()
 		.await?
@@ -76,7 +76,10 @@ pub async fn context_menu_fs_info(
 	Ok(FsInfo {
 		fs_path: get_path_from_location_id(db, location_id)
 			.await?
-			.join(&path_data.materialized_path),
+			.join(&MaterializedPath::from((
+				location_id,
+				&path_data.materialized_path,
+			))),
 		path_data,
 	})
 }

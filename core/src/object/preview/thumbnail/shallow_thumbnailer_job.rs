@@ -1,5 +1,7 @@
 use crate::{
-	job::{JobError, JobReportUpdate, JobResult, JobState, StatefulJob, WorkerContext},
+	job::{
+		JobError, JobInitData, JobReportUpdate, JobResult, JobState, StatefulJob, WorkerContext,
+	},
 	library::Library,
 	location::{
 		file_path_helper::{
@@ -9,12 +11,13 @@ use crate::{
 		LocationId,
 	},
 	prisma::{file_path, location, PrismaClient},
+	util::db::uuid_to_bytes,
 };
 
 use std::{
 	collections::VecDeque,
 	hash::Hash,
-	path::{Path, PathBuf},
+	path::{Path, PathBuf, MAIN_SEPARATOR_STR},
 };
 
 use sd_file_ext::extensions::Extension;
@@ -22,6 +25,7 @@ use sd_file_ext::extensions::Extension;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tracing::info;
+use uuid::Uuid;
 
 use super::{
 	finalize_thumbnailer, process_step, ThumbnailerError, ThumbnailerJobReport,
@@ -31,8 +35,6 @@ use super::{
 
 #[cfg(feature = "ffmpeg")]
 use super::FILTERED_VIDEO_EXTENSIONS;
-
-pub const SHALLOW_THUMBNAILER_JOB_NAME: &str = "shallow_thumbnailer";
 
 pub struct ShallowThumbnailerJob {}
 
@@ -49,14 +51,21 @@ impl Hash for ShallowThumbnailerJobInit {
 	}
 }
 
+impl JobInitData for ShallowThumbnailerJobInit {
+	type Job = ShallowThumbnailerJob;
+}
+
 #[async_trait::async_trait]
 impl StatefulJob for ShallowThumbnailerJob {
 	type Init = ShallowThumbnailerJobInit;
 	type Data = ThumbnailerJobState;
 	type Step = ThumbnailerJobStep;
 
-	fn name(&self) -> &'static str {
-		SHALLOW_THUMBNAILER_JOB_NAME
+	const NAME: &'static str = "shallow_thumbnailer";
+	const IS_BACKGROUND: bool = true;
+
+	fn new() -> Self {
+		Self {}
 	}
 
 	async fn init(&self, ctx: WorkerContext, state: &mut JobState<Self>) -> Result<(), JobError> {
@@ -80,7 +89,7 @@ impl StatefulJob for ShallowThumbnailerJob {
 				.map_err(ThumbnailerError::from)?;
 
 			get_existing_file_path_id(
-				MaterializedPath::new(location_id, &location_path, &full_path, true)
+				&MaterializedPath::new(location_id, &location_path, &full_path, true)
 					.map_err(ThumbnailerError::from)?,
 				db,
 			)
@@ -89,7 +98,7 @@ impl StatefulJob for ShallowThumbnailerJob {
 			.expect("Sub path should already exist in the database")
 		} else {
 			get_existing_file_path_id(
-				MaterializedPath::new(location_id, &location_path, &location_path, true)
+				&MaterializedPath::new(location_id, &location_path, &location_path, true)
 					.map_err(ThumbnailerError::from)?,
 				db,
 			)
@@ -149,7 +158,7 @@ impl StatefulJob for ShallowThumbnailerJob {
 					// SAFETY: We know that the sub_path is a valid UTF-8 string because we validated it before
 					state.init.sub_path.to_str().unwrap().to_string()
 				} else {
-					"".to_string()
+					MAIN_SEPARATOR_STR.to_string()
 				},
 				thumbnails_created: 0,
 			},
@@ -191,7 +200,7 @@ impl StatefulJob for ShallowThumbnailerJob {
 async fn get_files_by_extensions(
 	db: &PrismaClient,
 	location_id: LocationId,
-	parent_id: i32,
+	parent_id: Uuid,
 	extensions: &[Extension],
 	kind: ThumbnailerJobStepKind,
 ) -> Result<Vec<ThumbnailerJobStep>, JobError> {
@@ -200,7 +209,7 @@ async fn get_files_by_extensions(
 		.find_many(vec![
 			file_path::location_id::equals(location_id),
 			file_path::extension::in_vec(extensions.iter().map(ToString::to_string).collect()),
-			file_path::parent_id::equals(Some(parent_id)),
+			file_path::parent_id::equals(Some(uuid_to_bytes(parent_id))),
 		])
 		.select(file_path_just_materialized_path_cas_id::select())
 		.exec()

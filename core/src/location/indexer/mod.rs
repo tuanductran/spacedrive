@@ -4,6 +4,7 @@ use crate::{
 	library::Library,
 	prisma::file_path,
 	sync,
+	util::db::uuid_to_bytes,
 };
 
 use std::{
@@ -13,18 +14,17 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
-use int_enum::IntEnumError;
 use rmp_serde::{decode, encode};
 use rspc::ErrorCode;
-use rules::RuleKind;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
 use tokio::io;
 use tracing::info;
+use uuid::Uuid;
 
 use super::{
-	file_path_helper::{FilePathError, MaterializedPath},
+	file_path_helper::{FilePathError, FilePathMetadata, MaterializedPath},
 	location_with_indexer_rules,
 };
 
@@ -55,10 +55,12 @@ impl Hash for IndexerJobInit {
 /// contains some metadata for logging purposes.
 #[derive(Serialize, Deserialize)]
 pub struct IndexerJobData {
+	indexed_path: PathBuf,
 	db_write_start: DateTime<Utc>,
 	scan_read_time: Duration,
 	total_paths: usize,
 	indexed_paths: i64,
+	removed_paths: i64,
 }
 
 /// `IndexerJobStep` is a type alias, specifying that each step of the [`IndexerJob`] is a vector of
@@ -70,14 +72,14 @@ pub type IndexerJobStep = Vec<IndexerJobStepEntry>;
 #[derive(Serialize, Deserialize)]
 pub struct IndexerJobStepEntry {
 	full_path: PathBuf,
-	materialized_path: MaterializedPath,
-	created_at: DateTime<Utc>,
-	file_id: i32,
-	parent_id: Option<i32>,
+	materialized_path: MaterializedPath<'static>,
+	file_id: Uuid,
+	parent_id: Option<Uuid>,
+	metadata: FilePathMetadata,
 }
 
 impl IndexerJobData {
-	fn on_scan_progress(ctx: &WorkerContext, progress: Vec<ScanProgress>) {
+	fn on_scan_progress(ctx: &mut WorkerContext, progress: Vec<ScanProgress>) {
 		ctx.progress_debounced(
 			progress
 				.iter()
@@ -107,7 +109,7 @@ pub enum IndexerError {
 
 	// User errors
 	#[error("Invalid indexer rule kind integer: {0}")]
-	InvalidRuleKindInt(#[from] IntEnumError<RuleKind>),
+	InvalidRuleKindInt(i32),
 	#[error("Glob builder error: {0}")]
 	GlobBuilderError(#[from] globset::Error),
 
@@ -165,30 +167,38 @@ async fn execute_indexer_step(
 			(
 				sync.unique_shared_create(
 					sync::file_path::SyncId {
-						id: entry.file_id,
-						location: sync::location::SyncId {
-							pub_id: location.pub_id.clone(),
-						},
+						pub_id: uuid_to_bytes(entry.file_id),
 					},
 					[
-						("materialized_path", json!(materialized_path.clone())),
-						("name", json!(name.clone())),
-						("is_dir", json!(is_dir)),
-						("extension", json!(extension.clone())),
-						("parent_id", json!(entry.parent_id)),
-						("date_created", json!(entry.created_at)),
+						(materialized_path::NAME, json!(materialized_path.clone())),
+						(name::NAME, json!(name.clone())),
+						(is_dir::NAME, json!(is_dir)),
+						(extension::NAME, json!(extension.clone())),
+						(
+							size_in_bytes::NAME,
+							json!(entry.metadata.size_in_bytes.to_string()),
+						),
+						(inode::NAME, json!(entry.metadata.inode.to_le_bytes())),
+						(device::NAME, json!(entry.metadata.device.to_le_bytes())),
+						(parent_id::NAME, json!(entry.parent_id)),
+						(date_created::NAME, json!(entry.metadata.created_at)),
+						(date_modified::NAME, json!(entry.metadata.modified_at)),
 					],
 				),
 				file_path::create_unchecked(
-					entry.file_id,
+					uuid_to_bytes(entry.file_id),
 					location.id,
-					materialized_path,
-					name,
-					extension,
+					materialized_path.into_owned(),
+					name.into_owned(),
+					extension.into_owned(),
+					entry.metadata.inode.to_le_bytes().into(),
+					entry.metadata.device.to_le_bytes().into(),
 					vec![
 						is_dir::set(is_dir),
-						parent_id::set(entry.parent_id),
-						date_created::set(entry.created_at.into()),
+						size_in_bytes::set(entry.metadata.size_in_bytes.to_string()),
+						parent_id::set(entry.parent_id.map(uuid_to_bytes)),
+						date_created::set(entry.metadata.created_at.into()),
+						date_modified::set(entry.metadata.modified_at.into()),
 					],
 				),
 			)
@@ -224,7 +234,7 @@ where
 		.as_ref()
 		.expect("critical error: missing data on job state");
 
-	tracing::info!(
+	info!(
 		"scan of {} completed in {:?}. {} new files found, \
 			indexed {} files in db. db write completed in {:?}",
 		location_path.as_ref().display(),
@@ -236,7 +246,7 @@ where
 			.expect("critical error: non-negative duration"),
 	);
 
-	if data.indexed_paths > 0 {
+	if data.indexed_paths > 0 || data.removed_paths > 0 {
 		invalidate_query!(ctx.library, "locations.getExplorerData");
 	}
 
