@@ -1,4 +1,5 @@
 mod p2p_manager;
+pub mod pairing;
 mod peer_metadata;
 mod protocol;
 

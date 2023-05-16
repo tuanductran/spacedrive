@@ -249,8 +249,6 @@ impl KeyManager {
 		let content_salt = Salt::generate();
 		let secret_key = SecretKey::generate();
 
-		dbg!(SecretKeyString::from(secret_key.clone()).expose());
-
 		let algorithm = config.algorithm;
 		let hashing_algorithm = config.hashing_algorithm;
 

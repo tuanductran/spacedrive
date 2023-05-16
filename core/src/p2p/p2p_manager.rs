@@ -1,11 +1,11 @@
-use std::{path::PathBuf, str::FromStr, sync::Arc, time::Instant};
+use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use rspc::Type;
 use sd_p2p::{
 	spaceblock::{BlockSize, TransferRequest},
 	Event, Manager, PeerId,
 };
-use sd_sync::{CRDTOperation, CRDTOperationType, OwnedOperation};
+use sd_sync::CRDTOperation;
 use serde::Serialize;
 use tokio::{
 	fs::File,
@@ -13,7 +13,6 @@ use tokio::{
 	sync::broadcast,
 };
 use tracing::{debug, error, info};
-use uhlc::NTP64;
 use uuid::Uuid;
 
 use crate::{
@@ -41,6 +40,7 @@ pub enum P2PEvent {
 pub struct P2PManager {
 	pub events: broadcast::Sender<P2PEvent>,
 	pub manager: Arc<Manager<PeerMetadata>>,
+	// pub active_pairing: Option<PairingManager>,
 }
 
 impl P2PManager {
@@ -199,37 +199,6 @@ impl P2PManager {
 					}
 				}
 			});
-
-			// tokio::spawn({
-			// 	let this = this.clone();
-			// 	async move {
-			// 		tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-			// 		let mut connected = this
-			// 			.manager
-			// 			.get_connected_peers()
-			// 			.await
-			// 			.unwrap()
-			// 			.into_iter();
-			// 		if let Some(peer_id) = connected.next() {
-			// 			info!("Starting Spacedrop to peer '{}'", peer_id);
-			// 			this.broadcast_sync_events(
-			// 				Uuid::from_str("e4372586-d028-48f8-8be6-b4ff781a7dc2").unwrap(),
-			// 				vec![CRDTOperation {
-			// 					node: Uuid::new_v4(),
-			// 					timestamp: NTP64(1),
-			// 					id: Uuid::new_v4(),
-			// 					typ: CRDTOperationType::Owned(OwnedOperation {
-			// 						model: "TODO".to_owned(),
-			// 						items: Vec::new(),
-			// 					}),
-			// 				}],
-			// 			)
-			// 			.await;
-			// 		} else {
-			// 			info!("No clients found so skipping Spacedrop demo!");
-			// 		}
-			// 	}
-			// });
 		}
 
 		(this, rx)
