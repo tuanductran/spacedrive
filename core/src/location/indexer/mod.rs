@@ -34,66 +34,6 @@ use walk::WalkedEntry;
 
 pub use shallow::*;
 
-/// `IndexerJobInit` receives a `location::Data` object to be indexed
-/// and possibly a `sub_path` to be indexed. The `sub_path` is used when
-/// we want do index just a part of a location.
-#[derive(Serialize, Deserialize)]
-pub struct IndexerJobInit {
-	pub location: location_with_indexer_rules::Data,
-	pub sub_path: Option<PathBuf>,
-}
-
-impl Hash for IndexerJobInit {
-	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.location.id.hash(state);
-		if let Some(ref sub_path) = self.sub_path {
-			sub_path.hash(state);
-		}
-	}
-}
-/// `IndexerJobData` contains the state of the indexer job, which includes a `location_path` that
-/// is cached and casted on `PathBuf` from `local_path` column in the `location` table. It also
-/// contains some metadata for logging purposes.
-#[derive(Serialize, Deserialize)]
-pub struct IndexerJobData {
-	indexed_path: PathBuf,
-	indexer_rules: Vec<rules::IndexerRule>,
-	db_write_time: Duration,
-	scan_read_time: Duration,
-	total_paths: u64,
-	total_save_steps: u64,
-	indexed_count: u64,
-	removed_count: u64,
-}
-
-impl IndexerJobData {
-	fn on_scan_progress(ctx: &mut WorkerContext, progress: Vec<ScanProgress>) {
-		ctx.progress_debounced(
-			progress
-				.iter()
-				.map(|p| match p.clone() {
-					ScanProgress::ChunkCount(c) => JobReportUpdate::TaskCount(c),
-					ScanProgress::SavedChunks(p) => JobReportUpdate::CompletedTaskCount(p),
-					ScanProgress::Message(m) => JobReportUpdate::Message(m),
-				})
-				.collect(),
-		)
-	}
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct IndexerJobSaveStep {
-	chunk_idx: usize,
-	walked: Vec<WalkedEntry>,
-}
-
-#[derive(Clone)]
-pub enum ScanProgress {
-	ChunkCount(usize),
-	SavedChunks(usize),
-	Message(String),
-}
-
 /// Error type for the indexer module
 #[derive(Error, Debug)]
 pub enum IndexerError {
@@ -205,47 +145,49 @@ async fn execute_indexer_save_step(
 	Ok(count)
 }
 
-fn finalize_indexer<SJob, Init, Step>(
-	location_path: impl AsRef<Path>,
-	state: &JobState<SJob>,
-	ctx: WorkerContext,
-) -> JobResult
-where
-	SJob: StatefulJob<Init = Init, Data = IndexerJobData, Step = Step>,
-	Init: Serialize + DeserializeOwned + Send + Sync + Hash,
-	Step: Serialize + DeserializeOwned + Send + Sync,
-{
-	let data = state
-		.data
-		.as_ref()
-		.expect("critical error: missing data on job state");
+// fn finalize_indexer<SJob, Init, Step>(
+// 	location_path: impl AsRef<Path>,
+// 	state: &JobState<SJob>,
+// 	ctx: WorkerContext,
+// ) -> JobResult
+// where
+// 	SJob: StatefulJob<Init = Init, Data = IndexerJobData, Step = Step>,
+// 	Init: Serialize + DeserializeOwned + Send + Sync + Hash,
+// 	Step: Serialize + DeserializeOwned + Send + Sync,
+// {
+// 	let data = state
+// 		.data
+// 		.as_ref()
+// 		.expect("critical error: missing data on job state");
 
-	info!(
-		"scan of {} completed in {:?}. {} new files found, \
-			indexed {} files in db. db write completed in {:?}",
-		location_path.as_ref().display(),
-		data.scan_read_time,
-		data.total_paths,
-		data.indexed_count,
-		data.db_write_time,
-	);
+// 	info!(
+// 		"scan of {} completed in {:?}. {} new files found, \
+// 			indexed {} files in db. db write completed in {:?}",
+// 		location_path.as_ref().display(),
+// 		data.scan_read_time,
+// 		data.total_paths,
+// 		data.indexed_count,
+// 		data.db_write_time,
+// 	);
 
-	if data.indexed_count > 0 || data.removed_count > 0 {
-		invalidate_query!(ctx.library, "search.paths");
-	}
+// 	if data.indexed_count > 0 || data.removed_count > 0 {
+// 		invalidate_query!(ctx.library, "search.paths");
+// 	}
 
-	Ok(Some(serde_json::to_value(state)?))
-}
+// 	Ok(Some(serde_json::to_value(state)?))
+// }
 
 fn update_notifier_fn(batch_size: usize, ctx: &mut WorkerContext) -> impl FnMut(&Path, usize) + '_ {
 	move |path, total_entries| {
-		IndexerJobData::on_scan_progress(
-			ctx,
-			vec![
-				ScanProgress::Message(format!("Scanning {}", path.display())),
-				ScanProgress::ChunkCount(total_entries / batch_size),
-			],
-		);
+		// TODO
+		// IndexerJobData::on_scan_progress(
+		// 	ctx,
+		// 	vec![
+
+		// 		ScanProgress::Message(format!("Scanning {}", path.display())),
+		// 		ScanProgress::ChunkCount(total_entries / batch_size),
+		// 	],
+		// );
 	}
 }
 

@@ -1,13 +1,14 @@
 use crate::{
 	invalidate_query,
-	job::{
-		JobError, JobInitData, JobReportUpdate, JobResult, JobState, StatefulJob, WorkerContext,
-	},
+	job::{Job, JobError, JobMessage, JobReportUpdate},
+	library::Library,
 	util::error::FileIOError,
 };
 
 use std::{hash::Hash, path::PathBuf};
 
+use async_stream::stream;
+use futures::Stream;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use specta::Type;
@@ -16,7 +17,11 @@ use tracing::trace;
 
 use super::{context_menu_fs_info, FsInfo};
 
-pub struct FileEraserJob {}
+#[derive(Serialize, Deserialize, Hash, Type)]
+pub enum FileEraserJob {
+	Init(FileEraserJobInit),
+	Run(FsInfo),
+}
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Hash, Type)]
@@ -48,45 +53,26 @@ impl From<FsInfo> for FileEraserJobStep {
 	}
 }
 
-impl JobInitData for FileEraserJobInit {
-	type Job = FileEraserJob;
-}
-
-#[async_trait::async_trait]
-impl StatefulJob for FileEraserJob {
-	type Init = FileEraserJobInit;
-	type Data = FsInfo;
-	type Step = FileEraserJobStep;
-
+impl Job for FileEraserJob {
 	const NAME: &'static str = "file_eraser";
+	const IS_BACKGROUND: bool = false;
 
-	fn new() -> Self {
-		Self {}
-	}
+	fn run(&mut self, library: Library) -> Result<Box<dyn Stream<Item = JobMessage>>, JobError> {
+		stream! {
+			loop {
+				match *self {
+					FileEraserJob::Init(init) => {
+						let fs_info =
+							context_menu_fs_info(&library.db, init.location_id, init.path_id)
+								.await?;
 
-	async fn init(&self, ctx: WorkerContext, state: &mut JobState<Self>) -> Result<(), JobError> {
-		let fs_info =
-			context_menu_fs_info(&ctx.library.db, state.init.location_id, state.init.path_id)
-				.await?;
+						*self = Self::Run(fs_info);
+					},
+					FileEraserJob::Run(data) => {
+						// need to handle stuff such as querying prisma for all paths of a file, and deleting all of those if requested (with a checkbox in the ui)
+						// maybe a files.countOccurances/and or files.getPath(location_id, path_id) to show how many of these files would be erased (and where?)
 
-		state.data = Some(fs_info.clone());
-
-		state.steps.push_back(fs_info.into());
-
-		ctx.progress(vec![JobReportUpdate::TaskCount(state.steps.len())]);
-
-		Ok(())
-	}
-
-	async fn execute_step(
-		&self,
-		ctx: WorkerContext,
-		state: &mut JobState<Self>,
-	) -> Result<(), JobError> {
-		// need to handle stuff such as querying prisma for all paths of a file, and deleting all of those if requested (with a checkbox in the ui)
-		// maybe a files.countOccurances/and or files.getPath(location_id, path_id) to show how many of these files would be erased (and where?)
-
-		match &state.steps[0] {
+		match &data {
 			FileEraserJobStep::File { path } => {
 				let mut file = OpenOptions::new()
 					.read(true)
@@ -148,25 +134,34 @@ impl StatefulJob for FileEraserJob {
 			}
 		};
 
+		// TODO
 		ctx.progress(vec![JobReportUpdate::CompletedTaskCount(
 			state.step_number + 1,
 		)]);
-		Ok(())
-	}
 
-	async fn finalize(&mut self, ctx: WorkerContext, state: &mut JobState<Self>) -> JobResult {
-		let data = state
-			.data
-			.as_ref()
-			.expect("critical error: missing data on job state");
-		if data.path_data.is_dir {
-			tokio::fs::remove_dir_all(&data.fs_path)
-				.await
-				.map_err(|e| FileIOError::from((&data.fs_path, e)))?;
+
+
+						todo!();
+					}
+				}
+			}
 		}
-
-		invalidate_query!(ctx.library, "search.paths");
-
-		Ok(Some(serde_json::to_value(&state.init)?))
 	}
 }
+
+// 	async fn finalize(&mut self, ctx: WorkerContext, state: &mut JobState<Self>) -> JobResult {
+// 		let data = state
+// 			.data
+// 			.as_ref()
+// 			.expect("critical error: missing data on job state");
+// 		if data.path_data.is_dir {
+// 			tokio::fs::remove_dir_all(&data.fs_path)
+// 				.await
+// 				.map_err(|e| FileIOError::from((&data.fs_path, e)))?;
+// 		}
+
+// 		invalidate_query!(ctx.library, "search.paths");
+
+// 		Ok(Some(serde_json::to_value(&state.init)?))
+// 	}
+// }
