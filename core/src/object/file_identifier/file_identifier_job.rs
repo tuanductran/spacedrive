@@ -235,7 +235,7 @@ fn orphan_path_filters(
 	location_id: i32,
 	file_path_id: Option<i32>,
 	maybe_sub_iso_file_path: &Option<IsolatedFilePathData<'_>>,
-) -> Vec<file_path::WhereParam> {
+) -> Vec<file_path::WhereInput> {
 	chain_optional_iter(
 		[
 			file_path::object_id::equals(None),

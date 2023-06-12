@@ -2,6 +2,7 @@ use crate::{location::LocationId, prisma::file_path, util::error::NonUtf8PathErr
 
 use std::{borrow::Cow, fmt, path::Path};
 
+use prisma_client_rust::and;
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -206,9 +207,9 @@ impl AsRef<Path> for IsolatedFilePathData<'_> {
 	}
 }
 
-impl From<IsolatedFilePathData<'static>> for file_path::UniqueWhereParam {
+impl From<IsolatedFilePathData<'static>> for file_path::WhereUniqueInput {
 	fn from(path: IsolatedFilePathData<'static>) -> Self {
-		Self::LocationIdMaterializedPathNameExtensionEquals(
+		file_path::location_id_materialized_path_name_extension(
 			path.location_id,
 			path.materialized_path.into_owned(),
 			path.name.into_owned(),
@@ -217,20 +218,20 @@ impl From<IsolatedFilePathData<'static>> for file_path::UniqueWhereParam {
 	}
 }
 
-impl From<IsolatedFilePathData<'static>> for file_path::WhereParam {
+impl From<IsolatedFilePathData<'static>> for file_path::WhereInput {
 	fn from(path: IsolatedFilePathData<'static>) -> Self {
-		Self::And(vec![
+		and![
 			file_path::location_id::equals(path.location_id),
 			file_path::materialized_path::equals(path.materialized_path.into_owned()),
 			file_path::name::equals(path.name.into_owned()),
 			file_path::extension::equals(path.extension.into_owned()),
-		])
+		]
 	}
 }
 
-impl From<&IsolatedFilePathData<'_>> for file_path::UniqueWhereParam {
+impl From<&IsolatedFilePathData<'_>> for file_path::WhereUniqueInput {
 	fn from(path: &IsolatedFilePathData<'_>) -> Self {
-		Self::LocationIdMaterializedPathNameExtensionEquals(
+		file_path::location_id_materialized_path_name_extension(
 			path.location_id,
 			path.materialized_path.to_string(),
 			path.name.to_string(),
@@ -239,14 +240,14 @@ impl From<&IsolatedFilePathData<'_>> for file_path::UniqueWhereParam {
 	}
 }
 
-impl From<&IsolatedFilePathData<'_>> for file_path::WhereParam {
+impl From<&IsolatedFilePathData<'_>> for file_path::WhereInput {
 	fn from(path: &IsolatedFilePathData<'_>) -> Self {
-		Self::And(vec![
+		and![
 			file_path::location_id::equals(path.location_id),
 			file_path::materialized_path::equals(path.materialized_path.to_string()),
 			file_path::name::equals(path.name.to_string()),
 			file_path::extension::equals(path.extension.to_string()),
-		])
+		]
 	}
 }
 

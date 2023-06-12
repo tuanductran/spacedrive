@@ -210,7 +210,7 @@ impl SyncManager {
 										.unwrap();
 								let val = val.into_iter().next().unwrap();
 
-								location::UniqueWhereParam::deserialize(&val.0, val.1).unwrap()
+								location::WhereUniqueInput::deserialize(&val.0, val.1).unwrap()
 							},
 							serde_json::from_value(
 								data.remove(file_path::materialized_path::NAME).unwrap(),
@@ -260,7 +260,7 @@ impl SyncManager {
 									from_value(data.remove(location::node::NAME).unwrap()).unwrap();
 								let val = val.into_iter().next().unwrap();
 
-								node::UniqueWhereParam::deserialize(&val.0, val.1).unwrap()
+								node::WhereUniqueInput::deserialize(&val.0, val.1).unwrap()
 							},
 							data.into_iter()
 								.flat_map(|(k, v)| location::SetParam::deserialize(&k, v))

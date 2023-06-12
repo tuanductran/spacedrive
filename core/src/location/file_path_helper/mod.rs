@@ -241,7 +241,7 @@ pub fn filter_existing_file_path_params(
 		extension,
 		..
 	}: &IsolatedFilePathData,
-) -> Vec<file_path::WhereParam> {
+) -> Vec<file_path::WhereInput> {
 	vec![
 		file_path::location_id::equals(*location_id),
 		file_path::materialized_path::equals(materialized_path.to_string()),
@@ -263,7 +263,7 @@ pub fn loose_find_existing_file_path_params(
 		extension,
 		..
 	}: &IsolatedFilePathData,
-) -> Vec<file_path::WhereParam> {
+) -> Vec<file_path::WhereInput> {
 	vec![
 		file_path::location_id::equals(*location_id),
 		file_path::materialized_path::equals(materialized_path.to_string()),

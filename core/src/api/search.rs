@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use chrono::{DateTime, FixedOffset, Utc};
 use prisma_client_rust::operator::or;
 use rspc::{alpha::AlphaRouter, ErrorCode};
+use sd_prisma::prisma::{FilePathOrderByWithRelationInput, ObjectOrderByWithRelationInput};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -75,7 +76,7 @@ impl FilePathSearchOrdering {
 		.into()
 	}
 
-	fn into_param(self) -> file_path::OrderByWithRelationParam {
+	fn into_param(self) -> FilePathOrderByWithRelationInput {
 		let dir = self.get_sort_order();
 		use file_path::*;
 		match self {
@@ -149,7 +150,7 @@ impl ObjectSearchOrdering {
 		.into()
 	}
 
-	fn into_param(self) -> object::OrderByWithRelationParam {
+	fn into_param(self) -> ObjectOrderByWithRelationInput {
 		let dir = self.get_sort_order();
 		use object::*;
 		match self {
@@ -166,10 +167,10 @@ enum ObjectHiddenFilter {
 	Include,
 }
 
-impl Into<Option<object::WhereParam>> for ObjectHiddenFilter {
-	fn into(self) -> Option<object::WhereParam> {
+impl Into<Option<object::WhereInput>> for ObjectHiddenFilter {
+	fn into(self) -> Option<object::WhereInput> {
 		match self {
-			Self::Exclude => Some(object::hidden::not(true)),
+			Self::Exclude => Some(object::hidden::not(vec![object::hidden::equals(true)])),
 			Self::Include => None,
 		}
 	}
@@ -191,7 +192,7 @@ struct ObjectFilterArgs {
 }
 
 impl ObjectFilterArgs {
-	fn into_params(self) -> Vec<object::WhereParam> {
+	fn into_params(self) -> Vec<object::WhereInput> {
 		chain_optional_iter(
 			[],
 			[

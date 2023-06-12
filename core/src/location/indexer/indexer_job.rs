@@ -71,7 +71,7 @@ impl StatefulJob for IndexerJob {
 			.location
 			.indexer_rules
 			.iter()
-			.map(|rule| IndexerRule::try_from(&rule.indexer_rule))
+			.map(|rule| IndexerRule::try_from(rule.indexer_rule.as_ref()))
 			.collect::<Result<Vec<_>, _>>()
 			.map_err(IndexerError::from)?;
 

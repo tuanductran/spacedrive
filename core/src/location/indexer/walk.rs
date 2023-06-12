@@ -87,10 +87,10 @@ pub(super) async fn walk<FilePathDBFetcherFut, ToRemoveDbFetcherFut>(
 	root: impl AsRef<Path>,
 	indexer_rules: &[IndexerRule],
 	mut update_notifier: impl FnMut(&Path, usize),
-	file_paths_db_fetcher: impl Fn(Vec<file_path::WhereParam>) -> FilePathDBFetcherFut,
+	file_paths_db_fetcher: impl Fn(Vec<file_path::WhereInput>) -> FilePathDBFetcherFut,
 	to_remove_db_fetcher: impl Fn(
 		IsolatedFilePathData<'static>,
-		Vec<file_path::WhereParam>,
+		Vec<file_path::WhereInput>,
 	) -> ToRemoveDbFetcherFut,
 	iso_file_path_factory: impl Fn(&Path, bool) -> Result<IsolatedFilePathData<'static>, IndexerError>,
 	limit: u64,
@@ -152,10 +152,10 @@ pub(super) async fn keep_walking<FilePathDBFetcherFut, ToRemoveDbFetcherFut>(
 	to_walk_entry: &ToWalkEntry,
 	indexer_rules: &[IndexerRule],
 	mut update_notifier: impl FnMut(&Path, usize),
-	file_paths_db_fetcher: impl Fn(Vec<file_path::WhereParam>) -> FilePathDBFetcherFut,
+	file_paths_db_fetcher: impl Fn(Vec<file_path::WhereInput>) -> FilePathDBFetcherFut,
 	to_remove_db_fetcher: impl Fn(
 		IsolatedFilePathData<'static>,
-		Vec<file_path::WhereParam>,
+		Vec<file_path::WhereInput>,
 	) -> ToRemoveDbFetcherFut,
 	iso_file_path_factory: impl Fn(&Path, bool) -> Result<IsolatedFilePathData<'static>, IndexerError>,
 ) -> Result<
@@ -202,10 +202,10 @@ pub(super) async fn walk_single_dir<FilePathDBFetcherFut, ToRemoveDbFetcherFut>(
 	root: impl AsRef<Path>,
 	indexer_rules: &[IndexerRule],
 	mut update_notifier: impl FnMut(&Path, usize) + '_,
-	file_paths_db_fetcher: impl Fn(Vec<file_path::WhereParam>) -> FilePathDBFetcherFut,
+	file_paths_db_fetcher: impl Fn(Vec<file_path::WhereInput>) -> FilePathDBFetcherFut,
 	to_remove_db_fetcher: impl Fn(
 		IsolatedFilePathData<'static>,
-		Vec<file_path::WhereParam>,
+		Vec<file_path::WhereInput>,
 	) -> ToRemoveDbFetcherFut,
 	iso_file_path_factory: impl Fn(&Path, bool) -> Result<IsolatedFilePathData<'static>, IndexerError>,
 	add_root: bool,
@@ -285,7 +285,7 @@ where
 
 async fn filter_existing_paths<F>(
 	indexed_paths: HashSet<WalkingEntry>,
-	file_paths_db_fetcher: impl Fn(Vec<file_path::WhereParam>) -> F,
+	file_paths_db_fetcher: impl Fn(Vec<file_path::WhereInput>) -> F,
 ) -> Result<impl Iterator<Item = WalkedEntry>, IndexerError>
 where
 	F: Future<Output = Result<Vec<file_path_to_isolate::Data>, IndexerError>>,
@@ -337,7 +337,7 @@ async fn inner_walk_single_dir<ToRemoveDbFetcherFut>(
 	update_notifier: &mut impl FnMut(&Path, usize),
 	to_remove_db_fetcher: &impl Fn(
 		IsolatedFilePathData<'static>,
-		Vec<file_path::WhereParam>,
+		Vec<file_path::WhereInput>,
 	) -> ToRemoveDbFetcherFut,
 	iso_file_path_factory: &impl Fn(&Path, bool) -> Result<IsolatedFilePathData<'static>, IndexerError>,
 	WorkingTable {

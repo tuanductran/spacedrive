@@ -42,7 +42,7 @@ use sd_file_ext::extensions::ImageExtension;
 
 use chrono::{DateTime, Local};
 use notify::{Event, EventKind};
-use prisma_client_rust::{raw, PrismaValue};
+use prisma_client_rust::{not, raw, PrismaValue};
 use serde_json::json;
 use tokio::{fs, io::ErrorKind};
 use tracing::{debug, error, info, trace, warn};
@@ -197,7 +197,7 @@ pub(super) async fn create_file(
 		.object()
 		.find_first(vec![object::file_paths::some(vec![
 			file_path::cas_id::equals(Some(cas_id.clone())),
-			file_path::pub_id::not(created_file.pub_id.clone()),
+			not![file_path::pub_id::equals(created_file.pub_id.clone())],
 		])])
 		.select(object_just_id_has_thumbnail::select())
 		.exec()

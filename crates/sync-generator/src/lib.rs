@@ -166,7 +166,7 @@ impl PrismaGenerator for SDSyncGenerator {
                                             let val = val.into_iter().next().unwrap();
 
                                             #model_name_snake::#field_name_snake::connect(
-                                                #relation_model_name_snake::UniqueWhereParam::deserialize(&val.0, val.1).unwrap()
+                                                #relation_model_name_snake::WhereUniqueInput::deserialize(&val.0, val.1).unwrap()
                                             )
                                         }})
                                     } else { None }
@@ -212,7 +212,7 @@ impl PrismaGenerator for SDSyncGenerator {
                 match field_matches.len() {
                     0 => quote!(),
                     _ => quote! {
-                        impl #model_name_snake::UniqueWhereParam {
+                        impl #model_name_snake::WhereUniqueInput {
                             pub fn deserialize(field: &str, val: ::serde_json::Value) -> Option<Self> {
                                 Some(match field {
                                     #(#field_matches)*

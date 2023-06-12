@@ -24,6 +24,7 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
+use prisma_client_rust::not;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
@@ -170,7 +171,7 @@ impl JobManager {
 		Ok(library
 			.db
 			.job()
-			.find_many(vec![job::status::not(JobStatus::Running as i32)])
+			.find_many(vec![not![job::status::equals(JobStatus::Running as i32)]])
 			.order_by(job::date_created::order(SortOrder::Desc))
 			.take(100)
 			.exec()

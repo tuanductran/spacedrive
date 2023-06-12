@@ -22,7 +22,7 @@ use super::create;
 ///
 ///     pub fn find_unique(
 ///         self,
-///         param: crate::prisma::#model::UniqueWhereParam
+///         param: crate::prisma::#model::WhereUniqueInput
 ///     ) -> crate::prisma::#model::FindUnique<'a> {
 ///         self.client.client.#model().find_unique(param)
 ///     }
@@ -54,7 +54,7 @@ pub fn definition(model: ModelRef) -> TokenStream {
 
 			pub fn find_unique(
 				self,
-				param: crate::prisma::#name::UniqueWhereParam,
+				param: crate::prisma::#name::WhereUniqueInput,
 			) -> crate::prisma::#name::FindUnique<'a> {
 				self.client.client.#name().find_unique(param)
 			}
@@ -68,7 +68,7 @@ pub fn definition(model: ModelRef) -> TokenStream {
 
 			pub fn update(
 				self,
-				_where: crate::prisma::#name::UniqueWhereParam,
+				_where: crate::prisma::#name::WhereUniqueInput,
 				set_params: Vec<SetParam>,
 			) -> Update<'a> {
 				Update {
@@ -78,7 +78,7 @@ pub fn definition(model: ModelRef) -> TokenStream {
 				}
 			}
 
-			// pub fn delete(self, param: crate::prisma::#name::UniqueWhereParam) -> Delete<'a> {
+			// pub fn delete(self, param: crate::prisma::#name::WhereUniqueInput) -> Delete<'a> {
 			// 	Delete {
 			// 		client: self.client,
 			// 		r#where: param,
