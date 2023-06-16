@@ -12,7 +12,6 @@ import {
 	useRspcLibraryContext
 } from '@sd/client';
 import { getExplorerStore, useExplorerStore } from '~/hooks';
-import { useExplorerOrder } from '../Explorer/util';
 
 export const IconForCategory: Partial<Record<Category, string>> = {
 	Recents: iconNames.Collection,

@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { Heart } from 'phosphor-react-native';
 import { useState } from 'react';
 import { Pressable, PressableProps } from 'react-native';
@@ -10,10 +9,9 @@ type Props = {
 };
 
 const FavoriteButton = (props: Props) => {
-	const queryClient = useQueryClient();
 	const [favorite, setFavorite] = useState(props.data.favorite);
 
-	const { mutate: toggleFavorite, isLoading } = useLibraryMutation('files.setFavorite', {
+	const updateObject = useLibraryMutation('objects.update', {
 		onSuccess: () => {
 			// TODO: Invalidate search queries
 			setFavorite(!favorite);
@@ -22,8 +20,8 @@ const FavoriteButton = (props: Props) => {
 
 	return (
 		<Pressable
-			disabled={isLoading}
-			onPress={() => toggleFavorite({ id: props.data.id, favorite: !favorite })}
+			disabled={updateObject.isLoading}
+			onPress={() => updateObject.mutate([props.data.id, { favorite: !favorite }])}
 			style={props.style}
 		>
 			<Heart color="white" size={22} weight={favorite ? 'fill' : 'regular'} />

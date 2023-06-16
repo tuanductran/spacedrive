@@ -57,7 +57,9 @@ impl Category {
 
 pub async fn get_category_count(db: &Arc<PrismaClient>, category: Category) -> i32 {
 	let param = match category {
-		Category::Recents => not![object::date_accessed::equals(None)],
+		Category::Recents => {
+			not![object::date_accessed::equals(None)]
+		}
 		Category::Favorites => object::favorite::equals(Some(true)),
 		Category::Photos
 		| Category::Videos

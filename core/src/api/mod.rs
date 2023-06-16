@@ -21,12 +21,13 @@ pub enum CoreEvent {
 }
 
 mod categories;
-mod files;
+mod file_paths;
 mod jobs;
 mod keys;
 mod libraries;
 mod locations;
 mod nodes;
+mod objects;
 mod p2p;
 mod search;
 mod sync;
@@ -77,7 +78,8 @@ pub(crate) fn mount() -> Arc<Router> {
 		.merge("categories.", categories::mount())
 		// .merge("keys.", keys::mount())
 		.merge("locations.", locations::mount())
-		.merge("files.", files::mount())
+		.merge("file_paths.", file_paths::mount())
+		.merge("objects.", objects::mount())
 		.merge("jobs.", jobs::mount())
 		.merge("p2p.", p2p::mount())
 		.merge("nodes.", nodes::mount())

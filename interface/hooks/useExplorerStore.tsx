@@ -1,7 +1,7 @@
 import { proxy, useSnapshot } from 'valtio';
 import { proxySet } from 'valtio/utils';
 import { z } from 'zod';
-import { ExplorerItem, FilePathSearchOrdering, ObjectSearchOrdering, resetStore } from '@sd/client';
+import { ExplorerItem, FilePathSearchOrdering, resetStore } from '@sd/client';
 
 type Join<K, P> = K extends string | number
 	? P extends string | number
@@ -24,7 +24,7 @@ export enum ExplorerKind {
 export type CutCopyType = 'Cut' | 'Copy';
 
 export type FilePathSearchOrderingKeys = UnionKeys<FilePathSearchOrdering> | 'none';
-export type ObjectSearchOrderingKeys = UnionKeys<ObjectSearchOrdering> | 'none';
+// export type ObjectSearchOrderingKeys = UnionKeys<ObjectSearchOrdering> | 'none';
 
 export const SortOrder = z.union([z.literal('Asc'), z.literal('Desc')]);
 

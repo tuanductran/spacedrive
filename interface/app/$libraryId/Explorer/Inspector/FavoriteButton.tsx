@@ -14,22 +14,20 @@ export default function FavoriteButton(props: Props) {
 		setFavorite(!!props.data?.favorite);
 	}, [props.data]);
 
-	const { mutate: fileToggleFavorite, isLoading: isFavoriteLoading } = useLibraryMutation(
-		'files.setFavorite'
+	const updateObject = useLibraryMutation(
+		'objects.update'
 		// {
 		// 	onError: () => setFavorite(!!props.data?.favorite)
 		// }
 	);
 
 	const toggleFavorite = () => {
-		if (!isFavoriteLoading) {
-			fileToggleFavorite({ id: props.data.id, favorite: !favorite });
-			setFavorite(!favorite);
-		}
+		updateObject.mutate([props.data.id, { favorite: !favorite }]);
+		setFavorite(!favorite);
 	};
 
 	return (
-		<Button onClick={toggleFavorite} size="icon">
+		<Button disabled={updateObject.isLoading} onClick={toggleFavorite} size="icon">
 			<Heart weight={favorite ? 'fill' : 'regular'} className="h-[18px] w-[18px]" />
 		</Button>
 	);

@@ -13,7 +13,7 @@ const schema = z.object({
 });
 
 export default (props: Props) => {
-	const eraseFile = useLibraryMutation('files.eraseFiles');
+	const eraseFile = useLibraryMutation('file_paths.erase');
 
 	const form = useZodForm({
 		schema,

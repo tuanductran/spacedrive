@@ -15,7 +15,6 @@ use std::{
 	fmt::Debug,
 	hash::{Hash, Hasher},
 	mem,
-	path::PathBuf,
 	sync::Arc,
 };
 

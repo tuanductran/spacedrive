@@ -43,8 +43,8 @@ export default (props: PropsWithChildren) => {
 	const generateThumbsForLocation = useLibraryMutation('jobs.generateThumbsForLocation');
 	const objectValidator = useLibraryMutation('jobs.objectValidator');
 	const rescanLocation = useLibraryMutation('locations.fullRescan');
-	const copyFiles = useLibraryMutation('files.copyFiles');
-	const cutFiles = useLibraryMutation('files.cutFiles');
+	const copyFiles = useLibraryMutation('file_paths.copy');
+	const cutFiles = useLibraryMutation('file_paths.cut');
 
 	const isPastable =
 		store.cutCopyState.sourceLocationId !== store.locationId

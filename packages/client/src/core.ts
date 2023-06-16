@@ -5,7 +5,6 @@ export type Procedures = {
     queries: 
         { key: "buildInfo", input: never, result: BuildInfo } | 
         { key: "categories.list", input: LibraryArgs<null>, result: { [key in Category]: number } } | 
-        { key: "files.get", input: LibraryArgs<GetArgs>, result: { id: number; pub_id: number[]; kind: number | null; key_id: number | null; hidden: boolean | null; favorite: boolean | null; important: boolean | null; note: string | null; date_created: string | null; date_accessed: string | null; file_paths: FilePath[]; media_data: MediaData | null } | null } | 
         { key: "invalidation.test-invalidate", input: never, result: number } | 
         { key: "jobs.getHistory", input: LibraryArgs<null>, result: JobReport[] } | 
         { key: "jobs.getRunning", input: LibraryArgs<null>, result: JobReport[] } | 
@@ -18,6 +17,7 @@ export type Procedures = {
         { key: "locations.indexer_rules.listForLocation", input: LibraryArgs<number>, result: IndexerRule[] } | 
         { key: "locations.list", input: LibraryArgs<null>, result: { id: number; pub_id: number[]; node_id: number | null; name: string | null; path: string | null; total_capacity: number | null; available_capacity: number | null; is_archived: boolean | null; generate_preview_media: boolean | null; sync_preview_media: boolean | null; hidden: boolean | null; date_created: string | null; node: Node | null }[] } | 
         { key: "nodeState", input: never, result: NodeState } | 
+        { key: "objects.get", input: LibraryArgs<GetArgs>, result: { id: number; pub_id: number[]; kind: number | null; key_id: number | null; hidden: boolean | null; favorite: boolean | null; important: boolean | null; note: string | null; date_created: string | null; date_accessed: string | null; file_paths: FilePath[]; media_data: MediaData | null } | null } | 
         { key: "search.objects", input: LibraryArgs<ObjectSearchArgs>, result: SearchData<ExplorerItem> } | 
         { key: "search.paths", input: LibraryArgs<FilePathSearchArgs>, result: SearchData<ExplorerItem> } | 
         { key: "sync.messages", input: LibraryArgs<null>, result: CRDTOperation[] } | 
@@ -26,16 +26,12 @@ export type Procedures = {
         { key: "tags.list", input: LibraryArgs<null>, result: Tag[] } | 
         { key: "volumes.list", input: never, result: Volume[] },
     mutations: 
-        { key: "files.copyFiles", input: LibraryArgs<FileCopierJobInit>, result: null } | 
-        { key: "files.cutFiles", input: LibraryArgs<FileCutterJobInit>, result: null } | 
-        { key: "files.deleteFiles", input: LibraryArgs<FileDeleterJobInit>, result: null } | 
-        { key: "files.duplicateFiles", input: LibraryArgs<FileCopierJobInit>, result: null } | 
-        { key: "files.eraseFiles", input: LibraryArgs<FileEraserJobInit>, result: null } | 
-        { key: "files.removeAccessTime", input: LibraryArgs<number[]>, result: null } | 
-        { key: "files.renameFile", input: LibraryArgs<RenameFileArgs>, result: null } | 
-        { key: "files.setFavorite", input: LibraryArgs<SetFavoriteArgs>, result: null } | 
-        { key: "files.setNote", input: LibraryArgs<SetNoteArgs>, result: null } | 
-        { key: "files.updateAccessTime", input: LibraryArgs<number>, result: null } | 
+        { key: "file_paths.copy", input: LibraryArgs<FileCopierJobInit>, result: null } | 
+        { key: "file_paths.cut", input: LibraryArgs<FileCutterJobInit>, result: null } | 
+        { key: "file_paths.delete", input: LibraryArgs<FileDeleterJobInit>, result: null } | 
+        { key: "file_paths.duplicate", input: LibraryArgs<FileCopierJobInit>, result: null } | 
+        { key: "file_paths.erase", input: LibraryArgs<FileEraserJobInit>, result: null } | 
+        { key: "file_paths.rename", input: LibraryArgs<RenameFileArgs>, result: null } | 
         { key: "invalidation.test-invalidate-mutation", input: LibraryArgs<null>, result: null } | 
         { key: "jobs.clear", input: LibraryArgs<string>, result: null } | 
         { key: "jobs.clearAll", input: LibraryArgs<null>, result: null } | 
@@ -54,6 +50,9 @@ export type Procedures = {
         { key: "locations.relink", input: LibraryArgs<string>, result: null } | 
         { key: "locations.update", input: LibraryArgs<LocationUpdateArgs>, result: null } | 
         { key: "nodes.changeNodeName", input: ChangeNodeNameArgs, result: NodeConfig } | 
+        { key: "objects.removeAccessTime", input: LibraryArgs<number[]>, result: null } | 
+        { key: "objects.update", input: LibraryArgs<[number, UpdateObjectArgs]>, result: null } | 
+        { key: "objects.updateAccessTime", input: LibraryArgs<number>, result: null } | 
         { key: "p2p.acceptSpacedrop", input: [string, string | null], result: null } | 
         { key: "p2p.spacedrop", input: SpacedropArgs, result: null } | 
         { key: "tags.assign", input: LibraryArgs<TagAssignArgs>, result: null } | 
@@ -239,10 +238,6 @@ export type SanitisedNodeConfig = { id: string; name: string; p2p_port: number |
 
 export type SearchData<T> = { cursor: number[] | null; items: T[] }
 
-export type SetFavoriteArgs = { id: number; favorite: boolean }
-
-export type SetNoteArgs = { id: number; note: string | null }
-
 export type SharedOperation = { record_id: any; model: string; data: SharedOperationData }
 
 export type SharedOperationCreateData = { u: { [key: string]: any } } | "a"
@@ -262,5 +257,7 @@ export type TagAssignArgs = { object_ids: number[]; tag_id: number; unassign: bo
 export type TagCreateArgs = { name: string; color: string }
 
 export type TagUpdateArgs = { id: number; name: string | null; color: string | null }
+
+export type UpdateObjectArgs = { favorite?: boolean | null; note?: string | null }
 
 export type Volume = { name: string; mount_point: string; total_capacity: string; available_capacity: string; is_removable: boolean; disk_type: DiskType | null; file_system: string | null; is_root_filesystem: boolean }

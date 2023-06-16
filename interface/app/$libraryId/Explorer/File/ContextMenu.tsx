@@ -36,9 +36,9 @@ export default ({ data }: Props) => {
 	// const mountedKeys = useLibraryQuery(['keys.listMounted']);
 	// const hasMountedKeys = mountedKeys.data?.length ?? 0 > 0;
 
-	const copyFiles = useLibraryMutation('files.copyFiles');
+	const copyFiles = useLibraryMutation('file_paths.copy');
 
-	const removeFromRecents = useLibraryMutation('files.removeAccessTime');
+	const removeFromRecents = useLibraryMutation('objects.removeAccessTime');
 	const generateThumbnails = useLibraryMutation('jobs.generateThumbsForLocation');
 	const fullRescan = useLibraryMutation('locations.fullRescan');
 
@@ -275,7 +275,7 @@ export default ({ data }: Props) => {
 const OpenOrDownloadOptions = (props: { data: ExplorerItem }) => {
 	const os = useOperatingSystem();
 	const { openFilePath } = usePlatform();
-	const updateAccessTime = useLibraryMutation('files.updateAccessTime');
+	const updateAccessTime = useLibraryMutation('objects.updateAccessTime');
 	const filePath = getItemFilePath(props.data);
 
 	const { library } = useLibraryContext();

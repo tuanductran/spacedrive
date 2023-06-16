@@ -10,14 +10,10 @@ type Props = {
 const Note = (props: Props) => {
 	const [note, setNote] = useState(props.data.note || '');
 
-	const { mutate: fileSetNote } = useLibraryMutation('files.setNote');
+	const updateObject = useLibraryMutation('objects.update');
 
 	const debounce = useDebouncedCallback(
-		(note: string) =>
-			fileSetNote({
-				id: props.data.id,
-				note
-			}),
+		(note: string) => updateObject.mutate([props.data.id, { note }]),
 		2000
 	);
 

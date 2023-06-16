@@ -45,7 +45,6 @@ export const Inspector = ({ data, context, showThumbnail = true, ...props }: Pro
 	const isDark = useIsDark();
 	const objectData = data ? getItemObject(data) : null;
 	const filePathData = data ? getItemFilePath(data) : null;
-	const explorerStore = useExplorerStore();
 
 	const isDir = data?.type === 'Path' ? data.item.is_dir : false;
 
@@ -63,7 +62,7 @@ export const Inspector = ({ data, context, showThumbnail = true, ...props }: Pro
 		enabled: readyToFetch
 	});
 
-	const fullObjectData = useLibraryQuery(['files.get', { id: objectData?.id || -1 }], {
+	const fullObjectData = useLibraryQuery(['objects.get', { id: objectData?.id || -1 }], {
 		enabled: readyToFetch && objectData?.id !== undefined
 	});
 

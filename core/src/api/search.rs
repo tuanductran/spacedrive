@@ -63,27 +63,14 @@ enum FilePathSearchOrdering {
 }
 
 impl FilePathSearchOrdering {
-	fn get_sort_order(&self) -> prisma::SortOrder {
-		(*match self {
-			Self::Name(v) => v,
-			Self::SizeInBytes(v) => v,
-			Self::DateCreated(v) => v,
-			Self::DateModified(v) => v,
-			Self::DateIndexed(v) => v,
-			Self::Object(v) => return v.get_sort_order(),
-		})
-		.into()
-	}
-
 	fn into_param(self) -> file_path::OrderByWithRelationParam {
-		let dir = self.get_sort_order();
 		use file_path::*;
 		match self {
-			Self::Name(_) => name::order(dir),
-			Self::SizeInBytes(_) => size_in_bytes::order(dir),
-			Self::DateCreated(_) => date_created::order(dir),
-			Self::DateModified(_) => date_modified::order(dir),
-			Self::DateIndexed(_) => date_indexed::order(dir),
+			Self::Name(dir) => name::order(dir.into()),
+			Self::SizeInBytes(dir) => size_in_bytes::order(dir.into()),
+			Self::DateCreated(dir) => date_created::order(dir.into()),
+			Self::DateModified(dir) => date_modified::order(dir.into()),
+			Self::DateIndexed(dir) => date_indexed::order(dir.into()),
 			Self::Object(v) => object::order(vec![v.into_param()]),
 		}
 	}
@@ -142,18 +129,10 @@ enum ObjectSearchOrdering {
 }
 
 impl ObjectSearchOrdering {
-	fn get_sort_order(&self) -> prisma::SortOrder {
-		(*match self {
-			Self::DateAccessed(v) => v,
-		})
-		.into()
-	}
-
 	fn into_param(self) -> object::OrderByWithRelationParam {
-		let dir = self.get_sort_order();
 		use object::*;
 		match self {
-			Self::DateAccessed(_) => date_accessed::order(dir),
+			Self::DateAccessed(dir) => date_accessed::order(dir.into()),
 		}
 	}
 }
@@ -199,8 +178,6 @@ impl ObjectFilterArgs {
 			[
 				self.hidden.to_param(),
 				self.favorite.map(Some).map(favorite::equals),
-				self.date_accessed
-					.map(|date| date.into_prisma(date_accessed::equals)),
 				(!self.kind.is_empty()).then(|| kind::in_vec(self.kind.into_iter().collect())),
 				(!self.tags.is_empty()).then(|| {
 					let tags = self.tags.into_iter().map(tag::id::equals).collect();

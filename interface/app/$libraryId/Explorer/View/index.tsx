@@ -42,7 +42,7 @@ export const ViewItem = ({ data, children, ...props }: ViewItemProps) => {
 	const navigate = useNavigate();
 
 	const { openFilePath } = usePlatform();
-	const updateAccessTime = useLibraryMutation('files.updateAccessTime');
+	const updateAccessTime = useLibraryMutation('objects.updateAccessTime');
 	const filePath = getItemFilePath(data);
 
 	const explorerConfig = useExplorerConfigStore();

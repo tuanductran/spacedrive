@@ -9,13 +9,10 @@ interface Props {
 }
 
 export default function Note(props: Props) {
-	const setNote = useLibraryMutation('files.setNote');
+	const updateObject = useLibraryMutation('objects.update');
 
 	const debouncedSetNote = useDebouncedCallback((note: string) => {
-		setNote.mutate({
-			id: props.data.id,
-			note
-		});
+		updateObject.mutate([props.data.id, { note }]);
 	}, 500);
 
 	// Force update when component unmounts

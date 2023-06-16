@@ -27,7 +27,7 @@ export default ({
 
 	const [allowRename, setAllowRename] = useState(false);
 
-	const renameFile = useLibraryMutation(['files.renameFile'], {
+	const renameFile = useLibraryMutation(['file_paths.rename'], {
 		onError: () => reset()
 	});
 

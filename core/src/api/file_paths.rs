@@ -12,12 +12,11 @@ use crate::{
 		copy::FileCopierJobInit, cut::FileCutterJobInit, delete::FileDeleterJobInit,
 		erase::FileEraserJobInit,
 	},
-	prisma::{file_path, location, object},
+	prisma::{file_path, location},
 };
 
 use std::path::Path;
 
-use chrono::Utc;
 use futures::future::try_join_all;
 use regex::Regex;
 use rspc::{alpha::AlphaRouter, ErrorCode};
@@ -30,106 +29,6 @@ use super::{Ctx, R};
 
 pub(crate) fn mount() -> AlphaRouter<Ctx> {
 	R.router()
-		.procedure("get", {
-			#[derive(Type, Deserialize)]
-			pub struct GetArgs {
-				pub id: i32,
-			}
-			R.with2(library())
-				.query(|(_, library), args: GetArgs| async move {
-					Ok(library
-						.db
-						.object()
-						.find_unique(object::id::equals(args.id))
-						.include(object::include!({ file_paths media_data }))
-						.exec()
-						.await?)
-				})
-		})
-		.procedure("setNote", {
-			#[derive(Type, Deserialize)]
-			pub struct SetNoteArgs {
-				pub id: i32,
-				pub note: Option<String>,
-			}
-
-			R.with2(library())
-				.mutation(|(_, library), args: SetNoteArgs| async move {
-					library
-						.db
-						.object()
-						.update(
-							object::id::equals(args.id),
-							vec![object::note::set(args.note)],
-						)
-						.exec()
-						.await?;
-
-					invalidate_query!(library, "search.paths");
-					invalidate_query!(library, "search.objects");
-
-					Ok(())
-				})
-		})
-		.procedure("setFavorite", {
-			#[derive(Type, Deserialize)]
-			pub struct SetFavoriteArgs {
-				pub id: i32,
-				pub favorite: bool,
-			}
-
-			R.with2(library())
-				.mutation(|(_, library), args: SetFavoriteArgs| async move {
-					library
-						.db
-						.object()
-						.update(
-							object::id::equals(args.id),
-							vec![object::favorite::set(Some(args.favorite))],
-						)
-						.exec()
-						.await?;
-
-					invalidate_query!(library, "search.paths");
-					invalidate_query!(library, "search.objects");
-
-					Ok(())
-				})
-		})
-		.procedure("updateAccessTime", {
-			R.with2(library())
-				.mutation(|(_, library), id: i32| async move {
-					library
-						.db
-						.object()
-						.update(
-							object::id::equals(id),
-							vec![object::date_accessed::set(Some(Utc::now().into()))],
-						)
-						.exec()
-						.await?;
-
-					invalidate_query!(library, "search.paths");
-					Ok(())
-				})
-		})
-		.procedure("removeAccessTime", {
-			R.with2(library())
-				.mutation(|(_, library), object_ids: Vec<i32>| async move {
-					library
-						.db
-						.object()
-						.update_many(
-							vec![object::id::in_vec(object_ids)],
-							vec![object::date_accessed::set(None)],
-						)
-						.exec()
-						.await?;
-
-					invalidate_query!(library, "search.paths");
-					Ok(())
-				})
-		})
 		// .procedure("encryptFiles", {
 		// 	R.with2(library())
 		// 		.mutation(|(_, library), args: FileEncryptorJobInit| async move {
@@ -142,37 +41,37 @@ pub(crate) fn mount() -> AlphaRouter<Ctx> {
 		// 			library.spawn_job(args).await.map_err(Into::into)
 		// 		})
 		// })
-		.procedure("deleteFiles", {
+		.procedure("delete", {
 			R.with2(library())
 				.mutation(|(_, library), args: FileDeleterJobInit| async move {
 					library.spawn_job(args).await.map_err(Into::into)
 				})
 		})
-		.procedure("eraseFiles", {
+		.procedure("erase", {
 			R.with2(library())
 				.mutation(|(_, library), args: FileEraserJobInit| async move {
 					library.spawn_job(args).await.map_err(Into::into)
 				})
 		})
-		.procedure("duplicateFiles", {
+		.procedure("duplicate", {
 			R.with2(library())
 				.mutation(|(_, library), args: FileCopierJobInit| async move {
 					library.spawn_job(args).await.map_err(Into::into)
 				})
 		})
-		.procedure("copyFiles", {
+		.procedure("copy", {
 			R.with2(library())
 				.mutation(|(_, library), args: FileCopierJobInit| async move {
 					library.spawn_job(args).await.map_err(Into::into)
 				})
 		})
-		.procedure("cutFiles", {
+		.procedure("cut", {
 			R.with2(library())
 				.mutation(|(_, library), args: FileCutterJobInit| async move {
 					library.spawn_job(args).await.map_err(Into::into)
 				})
 		})
-		.procedure("renameFile", {
+		.procedure("rename", {
 			#[derive(Type, Deserialize)]
 			pub struct FromPattern {
 				pub pattern: String,

@@ -8,7 +8,7 @@ interface Propps extends UseDialogProps {
 }
 
 export default (props: Propps) => {
-	const deleteFile = useLibraryMutation('files.deleteFiles');
+	const deleteFile = useLibraryMutation('file_paths.delete');
 
 	const form = useZodForm();
 
