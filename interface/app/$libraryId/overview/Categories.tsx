@@ -57,7 +57,7 @@ export const Categories = (props: { selected: Category; onSelectedChanged(c: Cat
 	};
 
 	return (
-		<div className="sticky top-0 z-10 mt-2 flex bg-app/90 backdrop-blur">
+		<div className="flex bg-app/90 backdrop-blur">
 			<div
 				onClick={() => handleArrowOnClick('right')}
 				className={clsx(

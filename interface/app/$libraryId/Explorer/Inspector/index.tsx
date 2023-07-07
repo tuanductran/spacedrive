@@ -81,7 +81,7 @@ export const Inspector = ({ data, context, showThumbnail = true, ...props }: Pro
 							<FileThumb loadOriginal size={null} data={data} className="mx-auto" />
 						</div>
 					)}
-					<div className="flex w-full select-text flex-col overflow-hidden rounded-lg border border-app-line bg-app-box py-0.5 shadow-app-shade/10">
+					<div className="flex select-text flex-col overflow-hidden rounded-lg border border-app-line bg-app-box py-0.5 shadow-app-shade/10">
 						<h3 className="truncate px-3 pb-1 pt-2 text-base font-bold">
 							{filePathData?.name}
 							{filePathData?.extension && `.${filePathData.extension}`}
@@ -240,15 +240,18 @@ export const Inspector = ({ data, context, showThumbnail = true, ...props }: Pro
 					</div>
 				</>
 			) : (
-				<div className="flex w-full flex-col items-center justify-center">
-					<img src={isDark ? Image : Image_Light} />
+				<>
+					<div className="mb-2 aspect-square">
+						<img src={isDark ? Image : Image_Light} />
+					</div>
+
 					<div
-						className="mt-[15px] flex h-[390px] w-[245px] select-text items-center justify-center
-					rounded-lg border border-app-line bg-app-box py-0.5 shadow-app-shade/10"
+						className="flex h-[390px] items-center justify-center
+					rounded-lg border border-app-line bg-app-box shadow-app-shade/10"
 					>
 						<p className="text-sm text-ink-dull">Nothing selected</p>
 					</div>
-				</div>
+				</>
 			)}
 		</div>
 	);
