@@ -7,7 +7,7 @@ use crate::{
 			check_file_path_exists, create_file_path, file_path_with_object,
 			filter_existing_file_path_params,
 			isolated_file_path_data::extract_normalized_materialized_path_str,
-			loose_find_existing_file_path_params, FilePathError, FilePathMetadata,
+			loose_find_existing_file_path_params, path_is_hidden, FilePathError, FilePathMetadata,
 			IsolatedFilePathData, MetadataExt,
 		},
 		find_location,
@@ -122,7 +122,7 @@ pub(super) async fn create_dir(
 		library,
 		iso_file_path,
 		None,
-		FilePathMetadata::from_path(path, metadata).await?,
+		FilePathMetadata::from_path(&path, metadata).await?,
 	)
 	.await?;
 
@@ -174,7 +174,7 @@ async fn inner_create_file(
 	let iso_file_path = IsolatedFilePathData::new(location_id, location_path, path, false)?;
 	let extension = iso_file_path.extension.to_string();
 
-	let metadata = FilePathMetadata::from_path(path, metadata).await?;
+	let metadata = FilePathMetadata::from_path(&path, metadata).await?;
 
 	// First we check if already exist a file with this same inode number
 	// if it does, we just update it
@@ -407,6 +407,7 @@ async fn inner_update_file(
 		}
 	};
 
+	let is_hidden = path_is_hidden(full_path, &fs_metadata);
 	if file_path.cas_id != cas_id {
 		let (sync_params, db_params): (Vec<_>, Vec<_>) = {
 			use file_path::*;
@@ -459,6 +460,16 @@ async fn inner_update_file(
 						)
 					} else {
 						((inode::NAME, serde_json::Value::Null), None)
+					}
+				},
+				{
+					if is_hidden != file_path.hidden.unwrap_or_default() {
+						(
+							(hidden::NAME, json!(inode)),
+							Some(hidden::set(Some(is_hidden))),
+						)
+					} else {
+						((hidden::NAME, serde_json::Value::Null), None)
 					}
 				},
 			]
@@ -567,6 +578,24 @@ async fn inner_update_file(
 		}
 
 		invalidate_query!(library, "search.paths");
+	} else if is_hidden != file_path.hidden.unwrap_or_default() {
+		sync.write_ops(
+			db,
+			(
+				vec![sync.shared_update(
+					prisma_sync::file_path::SyncId {
+						pub_id: file_path.pub_id.clone(),
+					},
+					file_path::hidden::NAME,
+					json!(is_hidden),
+				)],
+				db.file_path().update(
+					file_path::pub_id::equals(file_path.pub_id.clone()),
+					vec![file_path::hidden::set(Some(is_hidden))],
+				),
+			),
+		)
+		.await?;
 	}
 
 	Ok(())
@@ -638,7 +667,7 @@ pub(super) async fn rename(
 			trace!("Updated {updated} file_paths");
 		}
 
-		let metadata = FilePathMetadata::from_path(new_path, &new_path_metadata).await?;
+		let is_hidden = path_is_hidden(new_path, &new_path_metadata);
 
 		library
 			.db
@@ -652,7 +681,7 @@ pub(super) async fn rename(
 					file_path::date_modified::set(Some(
 						DateTime::<Utc>::from(new_path_metadata.modified_or_now()).into(),
 					)),
-					file_path::hidden::set(Some(metadata.hidden)),
+					file_path::hidden::set(Some(is_hidden)),
 				],
 			)
 			.exec()
