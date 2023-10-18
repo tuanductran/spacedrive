@@ -5,7 +5,7 @@ import type { BackendFeature } from '../core';
 import { valtioPersist } from '../lib/valito';
 import { nonLibraryClient, useBridgeQuery } from '../rspc';
 
-export const features = ['spacedrop', 'p2pPairing', 'syncRoute', 'backups'] as const;
+export const features = ['spacedrop', 'p2pPairing', 'syncRoute', 'backups', 'p2pSettings'] as const;
 
 // This defines which backend feature flags show up in the UI.
 // This is kinda a hack to not having the runtime array of possible features as Specta only exports the types.
@@ -117,10 +117,8 @@ export function withFeatureFlag(
 	Component: React.FunctionComponent,
 	fallback: React.ReactNode = null
 ): React.FunctionComponent {
-	// @ts-expect-error
 	return (props) => {
 		const enabled = useFeatureFlag(flag);
-		// eslint-disable-next-line react-hooks/rules-of-hooks
 		return enabled ? <Component /> : fallback;
 	};
 }
