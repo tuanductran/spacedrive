@@ -56,7 +56,7 @@
 		"turbo": "^1.12.4",
 		"turbo-ignore": "^1.12.4",
 		"typescript": "^5.3.3",
-		"vite": "^5.1.4"
+		"vite": "^5.1.7"
 	},
 	"engines": {
 		"pnpm": ">=8.0.0",

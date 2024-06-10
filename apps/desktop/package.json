@@ -36,7 +36,7 @@
 		"@types/react-dom": "^18.2.19",
 		"sass": "^1.71.1",
 		"typescript": "^5.3.3",
-		"vite": "^5.1.4",
+		"vite": "^5.1.7",
 		"vite-tsconfig-paths": "^4.3.1"
 	}
 }
