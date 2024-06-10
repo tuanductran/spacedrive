@@ -21,8 +21,8 @@
 		"@iarna/toml": "^2.2.5",
 		"archive-wasm": "^1.6.1",
 		"mustache": "^4.2.0",
-		"semver": "^7.6.0",
-		"undici": "^6.6.2"
+		"semver": "^7.6.1",
+		"undici": "^6.11.1"
 	},
 	"devDependencies": {
 		"@babel/core": "^7.23.9",
